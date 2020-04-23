@@ -1,0 +1,9 @@
+scipy
+numpy
+albumentations
+torch
+opencv-python
+matplotlib
+torchvision==0.2.2
+pretrainedmodels==0.7.4
+torchnet==0.0.4
