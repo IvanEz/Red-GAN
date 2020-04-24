@@ -19,7 +19,9 @@ Using a U-net architecture for segmentation of Tumor Modalities
 
 class UnetTumorSegmentator:
     def __init__(self, mode, model_name, pure_ratio, synthetic_ratio, augmented_ratio):
-        self.fold = 'fold_2'
+
+        # the fold number to execute the code for
+        self.fold = 'fold_4'
 
         self.root_dir = '/home/qasima/segmentation_models.pytorch/'
         self.data_dir = '/home/qasima/segmentation_models.pytorch/data/' + self.fold + '/'
@@ -44,7 +46,7 @@ class UnetTumorSegmentator:
         self.validation_ratio = 0.1
 
         # training
-        # mode = pure, none, elastic, coregistration, augmented, none_only or augmented_coregistered
+        # mode = pure, none_only
         self.mode = mode
         self.encoder = 'resnet34'
         self.encoder_weights = None
@@ -59,7 +61,8 @@ class UnetTumorSegmentator:
         # paths
         self.model_name = model_name
         self.log_dir = self.root_dir + 'logs/' + self.loss + '/' + self.fold + '/' + self.model_name
-        self.model_dir = self.root_dir + 'models/' + self.loss + '/' + self.fold + '/' + self.model_name
+        self.model_root = self.root_dir + 'models/' + self.loss + '/' + self.fold + '/'
+        self.model_dir = self.model_root + self.model_name
         self.result_dir = self.root_dir + 'results/' + self.loss + '/' + self.fold + '/' + self.model_name
         self.scanner_plots_paths = self.root_dir + "scanner_class_plots/" + self.loss + '/' + self.fold + '/'
 
@@ -108,13 +111,13 @@ class UnetTumorSegmentator:
 
     def create_folders(self):
         # create folders for results and logs to be saved
-        if not os.path.exists(self.log_dir):
+        if not os.path.isdir(self.log_dir):
             os.makedirs(self.log_dir)
-        if not os.path.exists(self.result_dir):
+        if not os.path.isdir(self.result_dir):
             os.makedirs(self.result_dir)
-        # if not os.path.exists(self.model_dir):
-        #    os.makedirs(self.model_dir)
-        if not os.path.exists(self.scanner_plots_paths):
+        if not os.path.isdir(self.model_root):
+            os.makedirs(self.model_root)
+        if not os.path.isdir(self.scanner_plots_paths):
             os.makedirs(self.scanner_plots_paths)
 
     def set_dataset_paths(self):
@@ -126,23 +129,7 @@ class UnetTumorSegmentator:
         self.y_dir = os.path.join(self.data_dir, 'train_label_full')
 
         # set the synthetic dataset paths
-        if self.mode == 'elastic':
-            # elastic segmentation masks mode
-            self.x_dir_syn['t1ce'] = os.path.join(self.data_dir, 'train_t1ce_img_full_elastic')
-            self.x_dir_syn['flair'] = os.path.join(self.data_dir, 'train_flair_img_full_elastic')
-            self.x_dir_syn['t2'] = os.path.join(self.data_dir, 'train_t2_img_full_elastic')
-            self.x_dir_syn['t1'] = os.path.join(self.data_dir, 'train_t1_img_full_elastic')
-            self.y_dir_syn = os.path.join(self.data_dir, 'train_label_full_elastic')
-
-        elif self.mode == 'coregistration' or self.mode == 'augmented_coregistration':
-            # coregistration or augmented_coregistration mode
-            self.x_dir_syn['t1ce'] = os.path.join(self.data_dir, 'train_t1ce_img_full_coregistration')
-            self.x_dir_syn['flair'] = os.path.join(self.data_dir, 'train_flair_img_full_coregistration')
-            self.x_dir_syn['t2'] = os.path.join(self.data_dir, 'train_t2_img_full_coregistration')
-            self.x_dir_syn['t1'] = os.path.join(self.data_dir, 'train_t1_img_full_coregistration')
-            self.y_dir_syn = os.path.join(self.data_dir, 'train_label_full_coregistration')
-
-        elif 'none' in self.mode or 'none_only' in self.mode:
+        if 'none' in self.mode or 'none_only' in self.mode:
             # none mode or while training on none masks only
             self.x_dir_syn['t1ce'] = os.path.join(self.data_dir, '{}/train_t1ce_img_full'.
                                                   format(self.scanner_class))
@@ -220,61 +207,6 @@ class UnetTumorSegmentator:
         if self.mode == 'pure':
             # mode is pure then full dataset is the pure dataset
             self.full_dataset = self.full_dataset_pure
-
-        elif self.mode == 'augmented':
-            # mode is augmented so apply simple augmentations to pure dataset and concatenate with pure dataset
-            full_dataset_augmented = Dataset(
-                self.x_dir,
-                self.y_dir,
-                classes=self.classes,
-                augmentation=self.get_training_augmentation_simple(),
-            )
-            augmented_size = int(len(self.full_dataset_pure) * self.augmented_ratio)
-            full_dataset_augmented = torch.utils.data.Subset(full_dataset_augmented, np.arange(augmented_size))
-
-            # 200%
-            # full_dataset_augmented = torch.utils.data.ConcatDataset((full_dataset_augmented, full_dataset_augmented))
-            self.full_dataset = torch.utils.data.ConcatDataset((self.full_dataset_pure, full_dataset_augmented))
-
-        elif self.mode == 'augmented_coregistration':
-            # mode is augmented_coregistration so the full dataset consists of augmented pure and coregistered dataset
-            # along with the unaugmented ones
-            full_dataset_augmented = Dataset(
-                self.x_dir,
-                self.y_dir,
-                classes=self.classes,
-                augmentation=self.get_training_augmentation_simple(),
-            )
-            augmented_size = int(len(self.full_dataset_pure) * self.augmented_ratio)
-            full_dataset_augmented = torch.utils.data.Subset(full_dataset_augmented, np.arange(augmented_size))
-
-            # 200
-            # full_dataset_augmented = torch.utils.data.ConcatDataset((full_dataset_augmented, full_dataset_augmented))
-
-            full_dataset_syn = Dataset(
-                self.x_dir_syn,
-                self.y_dir_syn,
-                classes=self.classes,
-                augmentation=self.get_training_augmentation_padding(),
-            )
-
-            synthetic_size = int(len(self.full_dataset_pure) * self.synthetic_ratio)
-            full_dataset_syn = torch.utils.data.Subset(full_dataset_syn, np.arange(synthetic_size))
-
-            full_dataset_syn_augmented = Dataset(
-                self.x_dir_syn,
-                self.y_dir_syn,
-                classes=self.classes,
-                augmentation=self.get_training_augmentation_simple(),
-            )
-
-            synthetic_size = int(len(self.full_dataset_pure) * self.synthetic_ratio)
-            full_dataset_syn_augmented = torch.utils.data.Subset(full_dataset_syn_augmented, np.arange(synthetic_size))
-
-            self.full_dataset = torch.utils.data.ConcatDataset((self.full_dataset_pure,
-                                                                full_dataset_syn,
-                                                                full_dataset_augmented,
-                                                                full_dataset_syn_augmented))
 
         elif "none" in self.mode:
             # mode is none_only, full dataset consists of synthetic images generated from segmentation masks without
@@ -415,7 +347,7 @@ class UnetTumorSegmentator:
 
     @staticmethod
     def get_training_augmentation_simple():
-        # simple augmentation to be applied during the training phase
+        # add padding and also a few simple augmentations
         test_transform = [
             albu.Rotate(limit=15, interpolation=1, border_mode=4, value=None, always_apply=False, p=0.5),
             albu.VerticalFlip(always_apply=False, p=0.5),
@@ -584,157 +516,6 @@ class UnetTumorSegmentator:
         plt.savefig(plot_dir, bbox_inches='tight')
         plt.clf()
 
-    @staticmethod
-    def dice_coef(gt_mask, pr_mask):
-        # the hard dice score implementation
-        tp = np.sum(np.logical_and(pr_mask, gt_mask))
-        sum_ = pr_mask.sum() + gt_mask.sum()
-        if sum_ == 0:
-            return 1.0
-        dice = (2. * tp) / (pr_mask.sum() + gt_mask.sum())
-
-        return dice
-
-    def class_specific_dice(self, model_dir=None, scanner_cls=None):
-        class_names = ['Core', 'Edema', 'Enhancing']
-
-        # get class specific dice scores
-        if model_dir is None:
-            best_model = torch.load(self.model_dir)
-        else:
-            best_model = torch.load(model_dir)
-
-        full_dataset_test = Dataset(
-            self.x_dir_test,
-            self.y_dir_test,
-            classes=self.classes,
-            augmentation=self.get_training_augmentation_padding(),
-            scanner=scanner_cls
-        )
-
-        dice_avg_1 = []
-        dice_avg_2 = []
-        dice_avg_3 = []
-
-        dice_avg = [dice_avg_1, dice_avg_2, dice_avg_3]
-
-        test_size = int(len(full_dataset_test) * 1.0)
-        remaining_size = len(full_dataset_test) - test_size
-
-        full_dataset_test, train_dataset = torch.utils.data.random_split(full_dataset_test,
-                                                                         [test_size, remaining_size])
-
-        dice_avg_overall = []
-        dice_avg_tumor_core = []
-
-        test_loader = DataLoader(full_dataset_test, batch_size=3, shuffle=True, num_workers=1)
-
-        for image, gt_mask in test_loader:
-            image = image.to(self.device)
-            gt_mask = gt_mask.cpu().detach().numpy()
-            pr_mask = best_model.forward(image)
-
-            activation_fn = torch.nn.Sigmoid()
-            pr_mask = activation_fn(pr_mask)
-
-            pr_mask = pr_mask.cpu().detach().numpy().round()
-
-            for idx, cls in enumerate(self.classes):
-                dice = self.dice_coef(gt_mask[:, idx, :, :], pr_mask[:, idx, :, :])
-                dice_avg[idx].append(dice)
-
-            dice = self.dice_coef(gt_mask, pr_mask)
-            dice_avg_overall.append(dice)
-
-            # masking the edema class while keeping the enhancing and core to calculate the Tumor Core or TC class
-            gt_mask = gt_mask[:, [True, False, True], :, :]
-            pr_mask = pr_mask[:, [True, False, True], :, :]
-            dice = self.dice_coef(gt_mask, pr_mask)
-            dice_avg_tumor_core.append(dice)
-
-        for idx, cls in enumerate(self.classes):
-            print('Average ' + class_names[idx] + ': {}'.format(np.mean(dice_avg[idx])))
-            print('Standard Dev ' + class_names[idx] + ': {}'.format(np.std(dice_avg[idx])))
-
-        print("Average : ", np.mean(dice_avg_overall))
-        print("Standard Dev: ", np.std(dice_avg_overall))
-        print("Average Tumor Core : ", np.mean(dice_avg_tumor_core))
-        print("Tumor Core Standard Dev: ", np.std(dice_avg_tumor_core))
-        print("*************************************************\n\n")
-
-    def calculate_wilcoxon(self, target_training_scenario):
-        class_names = ['Core', 'Edema', 'Enhancing']
-
-        target_model_1 = torch.load(self.model_dir)
-        target_model_2 = torch.load(self.root_dir + '/models/' + self.loss + '/' + target_training_scenario)
-
-        full_dataset_test = Dataset(
-            self.x_dir_test,
-            self.y_dir_test,
-            classes=self.classes,
-            augmentation=self.get_training_augmentation_padding(),
-        )
-
-        dice_score_overall_1 = []
-        dice_score_overall_2 = []
-
-        dice_avg_1_model_1 = []
-        dice_avg_2_model_1 = []
-        dice_avg_3_model_1 = []
-
-        dice_avg_model_1 = [dice_avg_1_model_1, dice_avg_2_model_1, dice_avg_3_model_1]
-
-        dice_avg_1_model_2 = []
-        dice_avg_2_model_2 = []
-        dice_avg_3_model_2 = []
-
-        dice_avg_model_2 = [dice_avg_1_model_2, dice_avg_2_model_2, dice_avg_3_model_2]
-
-        dice_avg_tumor_core_1 = []
-        dice_avg_tumor_core_2 = []
-
-        test_loader = DataLoader(full_dataset_test, batch_size=1, shuffle=True, num_workers=1)
-        for image, gt_mask in test_loader:
-            image = image.to(self.device)
-            gt_mask = gt_mask.cpu().detach().numpy()
-            pr_mask_1 = target_model_1.forward(image)
-            pr_mask_2 = target_model_2.forward(image)
-
-            activation_fn = torch.nn.Sigmoid()
-            pr_mask_1 = activation_fn(pr_mask_1)
-            pr_mask_2 = activation_fn(pr_mask_2)
-
-            pr_mask_1 = pr_mask_1.cpu().detach().numpy().round()
-            pr_mask_2 = pr_mask_2.cpu().detach().numpy().round()
-
-            for idx, cls in enumerate(self.classes):
-                dice = self.dice_coef(gt_mask[:, idx, :, :], pr_mask_1[:, idx, :, :])
-                dice_avg_model_1[idx].append(dice)
-                dice = self.dice_coef(gt_mask[:, idx, :, :], pr_mask_2[:, idx, :, :])
-                dice_avg_model_2[idx].append(dice)
-
-            dice_1 = self.dice_coef(gt_mask, pr_mask_1)
-            dice_2 = self.dice_coef(gt_mask, pr_mask_2)
-
-            gt_mask = gt_mask[:, [True, False, True], :, :]
-            pr_mask_1 = pr_mask_1[:, [True, False, True], :, :]
-            pr_mask_2 = pr_mask_2[:, [True, False, True], :, :]
-            dice = self.dice_coef(gt_mask, pr_mask_1)
-            dice_avg_tumor_core_1.append(dice)
-            dice = self.dice_coef(gt_mask, pr_mask_2)
-            dice_avg_tumor_core_2.append(dice)
-
-            dice_score_overall_1.append(dice_1)
-            dice_score_overall_2.append(dice_2)
-
-        for idx, cls in enumerate(self.classes):
-            print('Wilcoxon ' + class_names[idx] + ': {}'.format(wilcoxon(dice_avg_model_1[idx],
-                                                                          dice_avg_model_2[idx])))
-
-        print("Wilcoxon Score WT: ", wilcoxon(dice_score_overall_1, dice_score_overall_2))
-        print("T Test WT: ", ttest_ind(dice_score_overall_1, dice_score_overall_2))
-        print("Wilcoxon Score TC: ", wilcoxon(dice_avg_tumor_core_1, dice_avg_tumor_core_2))
-
     def dump_results(self, results):
         file = os.path.join(self.root_dir, 'all_class_results.npy')
         data = np.load(file)
@@ -750,7 +531,7 @@ if __name__ == "__main__":
     continue_train = False
     test = True
     test_pure = False
-    mode = "vanilla_none"
+    mode = "train_scanner"
     fine_tuning = False
     scanner_class = sys.argv[1]
     os.environ['CUDA_VISIBLE_DEVICES'] = sys.argv[2]
