@@ -2,5 +2,5 @@
 ![Python 3.6](https://img.shields.io/badge/python-3.6-green.svg)
 
 # Red-GAN
-The implementations is in large adopted from SPADE-GAN (https://github.com/NVlabs/SPADE) 
+The implementation is in large adopted from SPADE-GAN (https://github.com/NVlabs/SPADE) 
 
