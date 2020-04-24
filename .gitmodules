@@ -1,3 +1,6 @@
 [submodule "GAN/models/networks/Synchronized-BatchNorm-PyTorch"]
 	path = GAN/models/networks/Synchronized-BatchNorm-PyTorch
 	url = https://github.com/vacancy/Synchronized-BatchNorm-PyTorch.git
+[submodule "gan/models/networks/Synchronized-BatchNorm-PyTorch"]
+	path = gan/models/networks/Synchronized-BatchNorm-PyTorch
+	url = https://github.com/vacancy/Synchronized-BatchNorm-PyTorch.git
