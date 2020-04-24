@@ -18,24 +18,32 @@ class UnetTumorSegmentator:
                  model_name,
                  pure_ratio,
                  synthetic_ratio,
-                 continue_train,
+                 test_ratio,
+                 validation_ratio,
                  root_dir,
                  epochs,
                  epochs_elapsed,
                  device,
+                 fold,
+                 data_dir,
+                 real_dir,
+                 synthetic_dir,
+                 test_dir,
                  **kwargs):
 
         # the fold number to execute the code for
-        self.fold = 'fold_4'
+        self.fold = 'fold_' + str(fold)
 
         self.root_dir = root_dir
-        self.data_dir = self.root_dir + 'data/' + self.fold + '/'
+        self.data_dir = data_dir
+        self.real_dir = real_dir
+        self.synthetic_dir = synthetic_dir
+        self.test_dir = test_dir
 
         # epochs
         self.epochs_num = epochs
         self.epochs_elapsed = epochs_elapsed
         self.total_epochs = 0 + self.epochs_num
-        self.continue_train = continue_train
 
         # what proportion of pure data to be used
         self.pure_ratio = pure_ratio
@@ -45,10 +53,10 @@ class UnetTumorSegmentator:
         self.synthetic_ratio = synthetic_ratio
 
         # proportion of test data to be used
-        self.test_ratio = 1.0
+        self.test_ratio = test_ratio
 
         # test and validation ratios to use
-        self.validation_ratio = 0.1
+        self.validation_ratio = validation_ratio
 
         # training
         self.mode = mode
@@ -65,11 +73,11 @@ class UnetTumorSegmentator:
 
         # set paths
         self.model_name = model_name
-        self.log_dir = self.root_dir + 'logs/' + self.loss + '/' + self.fold + '/' + self.model_name
-        self.model_root = self.root_dir + 'models/' + self.loss + '/' + self.fold + '/'
-        self.model_dir = self.model_root + self.model_name
-        self.result_dir = self.root_dir + 'results/' + self.loss + '/' + self.fold + '/' + self.model_name
-        self.scanner_plots_paths = self.root_dir + "scanner_class_plots/" + self.loss + '/' + self.fold + '/'
+
+        self.log_dir = os.path.join(self.root_dir, 'logs', self.loss, self.fold, self.model_name)
+        self.model_dir = os.path.join(self.root_dir, 'models', self.loss, self.fold, self.model_name)
+        self.result_dir = os.path.join(self.root_dir, 'results', self.loss, self.fold, self.model_name)
+        self.scanner_plots_dir = os.path.join(self.root_dir, 'scanner_class_plots', self.loss, self.fold, self.model_name)
 
         # dataset paths
         self.x_dir = dict()
@@ -93,18 +101,9 @@ class UnetTumorSegmentator:
 
         # scanner classes of BRATS dataset
         self.scanner_classes = [
-            '2013',
-            'CBICA',
-            'TCIA01',
-            'TCIA02',
-            'TCIA03',
-            'TCIA04',
-            'TCIA05',
-            'TCIA06',
-            'TCIA08',
-            'TMC',
+            '2013', 'CBICA', 'TCIA01', 'TCIA02', 'TCIA03', 'TCIA04', 'TCIA05', 'TCIA06', 'TCIA08', 'TMC',
         ]
-        self.fine_tuning = False
+
         self.scanner_class = 0
         self.scanner_classes_size = []
 
@@ -120,71 +119,41 @@ class UnetTumorSegmentator:
             os.makedirs(self.log_dir)
         if not os.path.isdir(self.result_dir):
             os.makedirs(self.result_dir)
-        if not os.path.isdir(self.model_root):
-            os.makedirs(self.model_root)
-        if not os.path.isdir(self.scanner_plots_paths):
-            os.makedirs(self.scanner_plots_paths)
+        if not os.path.isfile(self.model_dir):
+            os.makedirs(self.model_dir)
+        if not os.path.isdir(self.scanner_plots_dir):
+            os.makedirs(self.scanner_plots_dir)
 
     def set_dataset_paths(self):
         # pure dataset
-        self.x_dir['t1ce'] = os.path.join(self.data_dir, 'train_t1ce_img_full')
-        self.x_dir['flair'] = os.path.join(self.data_dir, 'train_flair_img_full')
-        self.x_dir['t2'] = os.path.join(self.data_dir, 'train_t2_img_full')
-        self.x_dir['t1'] = os.path.join(self.data_dir, 'train_t1_img_full')
-        self.y_dir = os.path.join(self.data_dir, 'train_label_full')
+        self.x_dir['t1ce'] = os.path.join(self.real_dir, 'train_t1ce_img_full')
+        self.x_dir['flair'] = os.path.join(self.real_dir, 'train_flair_img_full')
+        self.x_dir['t2'] = os.path.join(self.real_dir, 'train_t2_img_full')
+        self.x_dir['t1'] = os.path.join(self.real_dir, 'train_t1_img_full')
+        self.y_dir = os.path.join(self.real_dir, 'train_label_full')
 
         # set the synthetic dataset paths
         if 'none' in self.mode or 'none_only' in self.mode:
             # none mode or while training on none masks only
-            self.x_dir_syn['t1ce'] = os.path.join(self.data_dir, '{}/train_t1ce_img_full'.
-                                                  format(self.scanner_class))
-            self.x_dir_syn['flair'] = os.path.join(self.data_dir, '{}/train_flair_img_full'.
-                                                   format(self.scanner_class))
-            self.x_dir_syn['t2'] = os.path.join(self.data_dir, '{}/train_t2_img_full'.
-                                                format(self.scanner_class))
-            self.x_dir_syn['t1'] = os.path.join(self.data_dir, '{}/train_t1_img_full'.
-                                                format(self.scanner_class))
-            self.y_dir_syn = os.path.join(self.data_dir, '{}/train_label_full'.
-                                          format(self.scanner_class))
+            self.x_dir_syn['t1ce'] = os.path.join(self.synthetic_dir, '{}/train_t1ce_img_full')
+            self.x_dir_syn['flair'] = os.path.join(self.synthetic_dir, '{}/train_flair_img_full')
+            self.x_dir_syn['t2'] = os.path.join(self.synthetic_dir, '{}/train_t2_img_full')
+            self.x_dir_syn['t1'] = os.path.join(self.synthetic_dir, '{}/train_t1_img_full')
+            self.y_dir_syn = os.path.join(self.synthetic_dir, '{}/train_label_full')
 
-        elif self.mode == 'fine_tune_scanner' or self.mode == 'train_scanner':
-            if self.scanner_class == "balanced":
-                self.x_dir_syn['t1ce'] = list()
-                self.x_dir_syn['flair'] = list()
-                self.x_dir_syn['t2'] = list()
-                self.x_dir_syn['t1'] = list()
-                self.y_dir_syn = list()
-
-                for i, cls in enumerate(self.scanner_classes):
-                    self.x_dir_syn['t1ce'].append(os.path.join(self.data_dir, '{}/train_t1ce_img_full'.
-                                                               format(i)))
-                    self.x_dir_syn['flair'].append(os.path.join(self.data_dir, '{}/train_flair_img_full'.
-                                                                format(i)))
-                    self.x_dir_syn['t2'].append(os.path.join(self.data_dir, '{}/train_t2_img_full'.
-                                                             format(i)))
-                    self.x_dir_syn['t1'].append(os.path.join(self.data_dir, '{}/train_t1_img_full'.
-                                                             format(i)))
-                    self.y_dir_syn.append(os.path.join(self.data_dir, '{}/train_label_full'.
-                                                       format(i)))
-            else:
-                # scanner class dataset
-                self.x_dir_syn['t1ce'] = os.path.join(self.data_dir, '{}/train_t1ce_img_full'.
-                                                      format(self.scanner_class))
-                self.x_dir_syn['flair'] = os.path.join(self.data_dir, '{}/train_flair_img_full'.
-                                                       format(self.scanner_class))
-                self.x_dir_syn['t2'] = os.path.join(self.data_dir, '{}/train_t2_img_full'.
-                                                    format(self.scanner_class))
-                self.x_dir_syn['t1'] = os.path.join(self.data_dir, '{}/train_t1_img_full'.
-                                                    format(self.scanner_class))
-                self.y_dir_syn = os.path.join(self.data_dir, '{}/train_label_full'.
-                                              format(self.scanner_class))
+        elif self.mode == 'fine_tune' or self.mode == 'train':
+            self.x_dir_syn['t1ce'] = os.path.join(self.synthetic_dir, '{}/train_t1ce_img_full')
+            self.x_dir_syn['flair'] = os.path.join(self.synthetic_dir, '{}/train_flair_img_full')
+            self.x_dir_syn['t2'] = os.path.join(self.synthetic_dir, '{}/train_t2_img_full')
+            self.x_dir_syn['t1'] = os.path.join(self.synthetic_dir, '{}/train_t1_img_full')
+            self.y_dir_syn = os.path.join(self.synthetic_dir, '{}/train_label_full')
 
         # test dataset
-        self.x_dir_test['t1ce'] = os.path.join(self.data_dir, 'train_t1ce_img_full_test')
-        self.x_dir_test['flair'] = os.path.join(self.data_dir, 'train_flair_img_full_test')
-        self.x_dir_test['t2'] = os.path.join(self.data_dir, 'train_t2_img_full_test')
-        self.x_dir_test['t1'] = os.path.join(self.data_dir, 'train_t1_img_full_test')
-        self.y_dir_test = os.path.join(self.data_dir, 'train_label_full_test')
+        self.x_dir_test['t1ce'] = os.path.join(self.test_dir, 'train_t1ce_img_full_test')
+        self.x_dir_test['flair'] = os.path.join(self.test_dir, 'train_flair_img_full_test')
+        self.x_dir_test['t2'] = os.path.join(self.test_dir, 'train_t2_img_full_test')
+        self.x_dir_test['t1'] = os.path.join(self.test_dir, 'train_t1_img_full_test')
+        self.y_dir_test = os.path.join(self.test_dir, 'train_label_full_test')
 
     def scanner_class_sizes(self):
         for i, cls in enumerate(self.scanner_classes):
@@ -227,7 +196,7 @@ class UnetTumorSegmentator:
             self.full_dataset = full_dataset_syn
             self.full_dataset_pure = self.full_dataset
 
-        elif self.mode == "train_scanner":
+        elif self.mode == "train":
             if self.scanner_class == "balanced":
                 datasets = []
                 max_scanner_class = max(self.scanner_classes_size)
@@ -288,7 +257,7 @@ class UnetTumorSegmentator:
 
     def create_model(self):
         # create or load the model
-        if self.continue_train:
+        if self.mode == 'continue_train':
             self.model = torch.load(self.model_dir)
 
             self.freeze_layers_encoder = [self.model.encoder.conv1,
@@ -326,7 +295,7 @@ class UnetTumorSegmentator:
             smp.utils.metrics.FscoreMetric(eps=1.),
         ]
 
-        if self.fine_tuning:
+        if self.mode == 'fine_tuning':
             for layer in self.freeze_layers_encoder:
                 layer.require_grad = False
             for layer in self.freeze_layers_decoder:
@@ -433,7 +402,7 @@ class UnetTumorSegmentator:
             valid_logs = valid_epoch.run(valid_loader)
 
             # do something (save model, change lr, etc.)
-            if max_score < valid_logs['iou'] or self.fine_tuning:
+            if max_score < valid_logs['iou'] or self.mode == 'fine_tuning':
                 max_score = valid_logs['iou']
                 torch.save(self.model, self.model_dir)
                 print('Model saved!')
@@ -452,7 +421,7 @@ class UnetTumorSegmentator:
             valid_score[i] = valid_logs['f-score']
 
         # if continuing training, then load the previous loss and f-score logs
-        if self.continue_train:
+        if self.mode == 'continue_train':
             train_loss_prev, valid_loss_prev, train_score_prev, valid_score_prev = self.load_results()
             train_loss = np.append(train_loss_prev, train_loss)
             valid_loss = np.append(valid_loss_prev, valid_loss)
@@ -533,38 +502,38 @@ class UnetTumorSegmentator:
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument('--train', type=bool, choices=[True, False], default=True)
-    parser.add_argument('--continue_train', type=bool, choices=[True, False], default=False)
-    parser.add_argument('--test', type=bool, choices=[True, False], default=True)
-    parser.add_argument('--test_pure', type=bool, choices=[True, False], default=False)
-    parser.add_argument('--fine_tuning', type=bool, choices=[True, False], default=False)
     parser.add_argument('--model_name', type=str, required=True)
+    parser.add_argument('--fold', type=int, required=True, default=1, help='dataset fold number if applicable')
     parser.add_argument('--scanner_class', type=int, required=True)
     parser.add_argument('--gpu', type=str, default="0")
     parser.add_argument('--pure_ratio', type=float, default=1.0)
     parser.add_argument('--synthetic_ratio', type=float, default=1.0)
+    parser.add_argument('--test_ratio', type=float, default=1.0)
+    parser.add_argument('--validation_ratio', type=float, default=0.1, help='proportion of train set for validation')
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--epochs_elapsed', type=int, default=0, help="if continue train, then epochs already elapsed")
     parser.add_argument('--root_dir', type=str, required=True, help="root dir where models, logs and plot are saved")
-    parser.add_argument('--mode', type=str, required=True, choices=['train_scanner', 'fine_tune_scanner'])
+    parser.add_argument('--real_dir', type=str, required=True, help="root dir for the real data directory")
+    parser.add_argument('--synthetic_dir', type=str, required=True, help="root dir for the synthetic data directory")
+    parser.add_argument('--test_dir', type=str, required=True, help="root dir for the synthetic data directory")
+    parser.add_argument('--mode', type=str, required=True, choices=['train', 'fine_tune', 'test', 'continue_train'])
     parser.add_argument('--device', type=str, choices=['cuda', 'cpu'], default='cuda')
 
     args = parser.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
     unet_model = UnetTumorSegmentator(**args.__dict__)
-    unet_model.continue_train = args.continue_train
-    unet_model.fine_tuning = args.fine_tuning
-    unet_model.scanner_class = args.scanner_class
+
     unet_model.create_folders()
     unet_model.set_dataset_paths()
     unet_model.scanner_class_sizes()
     unet_model.create_dataset()
     unet_model.create_model()
     unet_model.setup_model()
-    if args.train:
+
+    if args.mode == 'train':
         unet_model.train_model()
-    if args.test:
+    if args.mode == 'test':
         pure_scores = []
         scores = []
         # for scanner_id, scanner in enumerate(unet_model.scanner_classes):
