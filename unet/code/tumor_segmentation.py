@@ -1,16 +1,11 @@
-import os
-import torch
-import numpy as np
-import cv2
 from torch.utils.data import DataLoader
 import albumentations as albu
-import pickle
 import matplotlib.pyplot as plt
-from brats_dataset import Dataset
-from configs import configs
-from scipy.stats import wilcoxon, ttest_ind
+import os, cv2, pickle, sys, torch
 import segmentation_models_pytorch as smp
-import sys
+from argparse import ArgumentParser
+from brats_dataset import Dataset
+import numpy as np
 
 """
 Using a U-net architecture for segmentation of Tumor Modalities
@@ -18,18 +13,29 @@ Using a U-net architecture for segmentation of Tumor Modalities
 
 
 class UnetTumorSegmentator:
-    def __init__(self, mode, model_name, pure_ratio, synthetic_ratio, augmented_ratio):
+    def __init__(self,
+                 mode,
+                 model_name,
+                 pure_ratio,
+                 synthetic_ratio,
+                 continue_train,
+                 root_dir,
+                 epochs,
+                 epochs_elapsed,
+                 device,
+                 **kwargs):
 
         # the fold number to execute the code for
         self.fold = 'fold_4'
 
-        self.root_dir = '/home/qasima/segmentation_models.pytorch/'
-        self.data_dir = '/home/qasima/segmentation_models.pytorch/data/' + self.fold + '/'
+        self.root_dir = root_dir
+        self.data_dir = self.root_dir + 'data/' + self.fold + '/'
 
         # epochs
-        self.epochs_num = 50
+        self.epochs_num = epochs
+        self.epochs_elapsed = epochs_elapsed
         self.total_epochs = 0 + self.epochs_num
-        self.continue_train = False
+        self.continue_train = continue_train
 
         # what proportion of pure data to be used
         self.pure_ratio = pure_ratio
@@ -37,7 +43,6 @@ class UnetTumorSegmentator:
         # proportion of synthetic or augmented data to be used, depending on the mode, w.r.t the pure dataset size
         # can be set upto 2.0 i.e. 200%
         self.synthetic_ratio = synthetic_ratio
-        self.augmented_ratio = augmented_ratio
 
         # proportion of test data to be used
         self.test_ratio = 1.0
@@ -46,19 +51,19 @@ class UnetTumorSegmentator:
         self.validation_ratio = 0.1
 
         # training
-        # mode = pure, none_only
         self.mode = mode
         self.encoder = 'resnet34'
         self.encoder_weights = None
-        self.device = 'cuda'
+        self.device = device
         self.activation = 'softmax'
         self.loss = 'cross_entropy'
 
+        # all_classes: background, tumor region 1, tumor region 2, non-tumor brain region, tumor region 3
+        # classes: classes to be trained upon
         self.all_classes = ['bg', 't_2', 't_1', 'b', 't_3']
-        # classes to be trained upon
         self.classes = ['t_2', 't_1', 't_3']
 
-        # paths
+        # set paths
         self.model_name = model_name
         self.log_dir = self.root_dir + 'logs/' + self.loss + '/' + self.fold + '/' + self.model_name
         self.model_root = self.root_dir + 'models/' + self.loss + '/' + self.fold + '/'
@@ -86,7 +91,7 @@ class UnetTumorSegmentator:
         self.metrics = None
         self.optimizer = None
 
-        # scanners
+        # scanner classes of BRATS dataset
         self.scanner_classes = [
             '2013',
             'CBICA',
@@ -428,7 +433,7 @@ class UnetTumorSegmentator:
             valid_logs = valid_epoch.run(valid_loader)
 
             # do something (save model, change lr, etc.)
-            if max_score < valid_logs['iou'] or fine_tuning:
+            if max_score < valid_logs['iou'] or self.fine_tuning:
                 max_score = valid_logs['iou']
                 torch.save(self.model, self.model_dir)
                 print('Model saved!')
@@ -527,74 +532,83 @@ class UnetTumorSegmentator:
 
 
 if __name__ == "__main__":
-    train = True
-    continue_train = False
-    test = True
-    test_pure = False
-    mode = "train_scanner"
-    fine_tuning = False
-    scanner_class = sys.argv[1]
-    os.environ['CUDA_VISIBLE_DEVICES'] = sys.argv[2]
-    for config in configs:
-        if config["mode"] in mode:
-            config["model_name"] = config["model_name"] + '_{}'.format(scanner_class)
-            unet_model = UnetTumorSegmentator(**config)
-            unet_model.continue_train = continue_train
-            unet_model.fine_tuning = fine_tuning
-            unet_model.scanner_class = scanner_class
-            unet_model.create_folders()
-            unet_model.set_dataset_paths()
-            unet_model.scanner_class_sizes()
-            unet_model.create_dataset()
-            unet_model.create_model()
-            unet_model.setup_model()
-            if train:
-                unet_model.train_model()
-            if test:
-                pure_scores = []
-                scores = []
-                # for scanner_id, scanner in enumerate(unet_model.scanner_classes):
-                """
-                unet_model.model_name = config["model_name"] + '_{}'.format(scanner_class)
-                unet_model.model_dir = unet_model.root_dir + 'models/' + \
-                                       unet_model.loss + '/' + \
-                                       unet_model.fold + '/' + \
-                                       unet_model.model_name
-                """
-                scores.append(unet_model.evaluate_model(scanner_cls=None))
-                """
-                unet_model.model_name = 'model_epochs100_percent0_pure_vis_5'
-                unet_model.model_dir = unet_model.root_dir + 'models/' + \
-                                       unet_model.loss + '/' + \
-                                       unet_model.fold + '/' + \
-                                       unet_model.model_name
-                pure_scores.append(unet_model.evaluate_model(scanner_cls=scanner_id))
-                
+    parser = ArgumentParser()
+    parser.add_argument('--train', type=bool, choices=[True, False], default=True)
+    parser.add_argument('--continue_train', type=bool, choices=[True, False], default=False)
+    parser.add_argument('--test', type=bool, choices=[True, False], default=True)
+    parser.add_argument('--test_pure', type=bool, choices=[True, False], default=False)
+    parser.add_argument('--fine_tuning', type=bool, choices=[True, False], default=False)
+    parser.add_argument('--model_name', type=str, required=True)
+    parser.add_argument('--scanner_class', type=int, required=True)
+    parser.add_argument('--gpu', type=str, default="0")
+    parser.add_argument('--pure_ratio', type=float, default=1.0)
+    parser.add_argument('--synthetic_ratio', type=float, default=1.0)
+    parser.add_argument('--epochs', type=int, default=50)
+    parser.add_argument('--epochs_elapsed', type=int, default=0, help="if continue train, then epochs already elapsed")
+    parser.add_argument('--root_dir', type=str, required=True, help="root dir where models, logs and plot are saved")
+    parser.add_argument('--mode', type=str, required=True, choices=['train_scanner', 'fine_tune_scanner'])
+    parser.add_argument('--device', type=str, choices=['cuda', 'cpu'], default='cuda')
 
-                x = np.arange(len(scores))
-                width = 0.35
+    args = parser.parse_args()
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
-                unet_model.dump_results(results=np.array(scores))
+    unet_model = UnetTumorSegmentator(**args.__dict__)
+    unet_model.continue_train = args.continue_train
+    unet_model.fine_tuning = args.fine_tuning
+    unet_model.scanner_class = args.scanner_class
+    unet_model.create_folders()
+    unet_model.set_dataset_paths()
+    unet_model.scanner_class_sizes()
+    unet_model.create_dataset()
+    unet_model.create_model()
+    unet_model.setup_model()
+    if args.train:
+        unet_model.train_model()
+    if args.test:
+        pure_scores = []
+        scores = []
+        # for scanner_id, scanner in enumerate(unet_model.scanner_classes):
+        """
+        unet_model.model_name = config["model_name"] + '_{}'.format(scanner_class)
+        unet_model.model_dir = unet_model.root_dir + 'models/' + \
+                               unet_model.loss + '/' + \
+                               unet_model.fold + '/' + \
+                               unet_model.model_name
+        """
+        scores.append(unet_model.evaluate_model(scanner_cls=None))
+        """
+        unet_model.model_name = 'model_epochs100_percent0_pure_vis_5'
+        unet_model.model_dir = unet_model.root_dir + 'models/' + \
+                               unet_model.loss + '/' + \
+                               unet_model.fold + '/' + \
+                               unet_model.model_name
+        pure_scores.append(unet_model.evaluate_model(scanner_cls=scanner_id))
+        
 
-                fig = plt.figure(figsize=(20, 10))
-                ax = fig.add_subplot(111)
-                ax.bar(x, scores, label="conditioned", width=width)
-                # ax.bar(x + width, pure_scores, label="unconditioned", width=width)
-                ax.set_title("F-scores of model conditioned on scanner classes")
-                ax.set_ylim(0.0, 1.0)
-                ax.set_xticks(x + width / 2)
-                ax.set_yticks(np.linspace(0.0, 1.0, 50))
-                ax.set_ylabel("f-score")
-                ax.set_xlabel("Scanner Classes")
-                ax.set_xticklabels(unet_model.scanner_classes)
-                ax.legend()
-                ax.grid()
-                fig.tight_layout()
-                plt.savefig(unet_model.scanner_plots_paths +
-                            "new")
-                plt.close(fig)
-                """
+        x = np.arange(len(scores))
+        width = 0.35
 
-            if test_pure:
-                for scanner_id, scanner in enumerate(unet_model.scanner_classes):
-                    unet_model.evaluate_model(scanner_cls=scanner_id)
+        unet_model.dump_results(results=np.array(scores))
+
+        fig = plt.figure(figsize=(20, 10))
+        ax = fig.add_subplot(111)
+        ax.bar(x, scores, label="conditioned", width=width)
+        # ax.bar(x + width, pure_scores, label="unconditioned", width=width)
+        ax.set_title("F-scores of model conditioned on scanner classes")
+        ax.set_ylim(0.0, 1.0)
+        ax.set_xticks(x + width / 2)
+        ax.set_yticks(np.linspace(0.0, 1.0, 50))
+        ax.set_ylabel("f-score")
+        ax.set_xlabel("Scanner Classes")
+        ax.set_xticklabels(unet_model.scanner_classes)
+        ax.legend()
+        ax.grid()
+        fig.tight_layout()
+        plt.savefig(unet_model.scanner_plots_paths +
+                    "new")
+        plt.close(fig)
+        """
+
+    if args.test_pure:
+        for scanner_id, scanner in enumerate(unet_model.scanner_classes):
+            unet_model.evaluate_model(scanner_cls=scanner_id)
