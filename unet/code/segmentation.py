@@ -25,7 +25,6 @@ class UnetTumorSegmentator:
                  epochs_elapsed,
                  device,
                  fold,
-                 data_dir,
                  real_dir,
                  synthetic_dir,
                  test_dir,
@@ -35,10 +34,11 @@ class UnetTumorSegmentator:
         self.fold = 'fold_' + str(fold)
 
         self.root_dir = root_dir
-        self.data_dir = data_dir
         self.real_dir = real_dir
         self.synthetic_dir = synthetic_dir
         self.test_dir = test_dir
+        self.t1ce, self.t1, self.t2, self.flair, self.label = \
+            kwargs['t1ce'], kwargs['t1'], kwargs['t2'], kwargs['flair'], kwargs['label']
 
         # epochs
         self.epochs_num = epochs
@@ -124,36 +124,20 @@ class UnetTumorSegmentator:
         if not os.path.isdir(self.scanner_plots_dir):
             os.makedirs(self.scanner_plots_dir)
 
+    def set_paths(self, root):
+        d = dict()
+        d['t1ce'] = os.path.join(root, self.t1ce)
+        d['flair'] = os.path.join(root, self.flair)
+        d['t2'] = os.path.join(root, self.t2)
+        d['t1'] = os.path.join(root, self.t1)
+        y = os.path.join(root, self.label)
+
+        return d, y
+
     def set_dataset_paths(self):
-        # pure dataset
-        self.x_dir['t1ce'] = os.path.join(self.real_dir, 'train_t1ce_img_full')
-        self.x_dir['flair'] = os.path.join(self.real_dir, 'train_flair_img_full')
-        self.x_dir['t2'] = os.path.join(self.real_dir, 'train_t2_img_full')
-        self.x_dir['t1'] = os.path.join(self.real_dir, 'train_t1_img_full')
-        self.y_dir = os.path.join(self.real_dir, 'train_label_full')
-
-        # set the synthetic dataset paths
-        if 'none' in self.mode or 'none_only' in self.mode:
-            # none mode or while training on none masks only
-            self.x_dir_syn['t1ce'] = os.path.join(self.synthetic_dir, '{}/train_t1ce_img_full')
-            self.x_dir_syn['flair'] = os.path.join(self.synthetic_dir, '{}/train_flair_img_full')
-            self.x_dir_syn['t2'] = os.path.join(self.synthetic_dir, '{}/train_t2_img_full')
-            self.x_dir_syn['t1'] = os.path.join(self.synthetic_dir, '{}/train_t1_img_full')
-            self.y_dir_syn = os.path.join(self.synthetic_dir, '{}/train_label_full')
-
-        elif self.mode == 'fine_tune' or self.mode == 'train':
-            self.x_dir_syn['t1ce'] = os.path.join(self.synthetic_dir, '{}/train_t1ce_img_full')
-            self.x_dir_syn['flair'] = os.path.join(self.synthetic_dir, '{}/train_flair_img_full')
-            self.x_dir_syn['t2'] = os.path.join(self.synthetic_dir, '{}/train_t2_img_full')
-            self.x_dir_syn['t1'] = os.path.join(self.synthetic_dir, '{}/train_t1_img_full')
-            self.y_dir_syn = os.path.join(self.synthetic_dir, '{}/train_label_full')
-
-        # test dataset
-        self.x_dir_test['t1ce'] = os.path.join(self.test_dir, 'train_t1ce_img_full_test')
-        self.x_dir_test['flair'] = os.path.join(self.test_dir, 'train_flair_img_full_test')
-        self.x_dir_test['t2'] = os.path.join(self.test_dir, 'train_t2_img_full_test')
-        self.x_dir_test['t1'] = os.path.join(self.test_dir, 'train_t1_img_full_test')
-        self.y_dir_test = os.path.join(self.test_dir, 'train_label_full_test')
+        self.x_dir, self.y_dir = self.set_paths(self.real_dir)
+        self.x_dir_syn, self.y_dir_syn = self.set_paths(self.synthetic_dir)
+        self.x_dir_test, self.y_dir_test = self.set_paths(self.test_dir)
 
     def scanner_class_sizes(self):
         for i, cls in enumerate(self.scanner_classes):
@@ -516,6 +500,11 @@ if __name__ == "__main__":
     parser.add_argument('--real_dir', type=str, required=True, help="root dir for the real data directory")
     parser.add_argument('--synthetic_dir', type=str, required=True, help="root dir for the synthetic data directory")
     parser.add_argument('--test_dir', type=str, required=True, help="root dir for the synthetic data directory")
+    parser.add_argument('--t1ce', type=str, help="name for t1ce data directories", default="train_t1ce_img_full")
+    parser.add_argument('--t2', type=str, help="name for t1ce data directories", default="train_t2_img_full")
+    parser.add_argument('--t1', type=str, help="name for t1ce data directories", default="train_t1_img_full")
+    parser.add_argument('--flair', type=str, help="name for t1ce data directories", default="train_flair_img_full")
+    parser.add_argument('--label', type=str, help="name for labels data directories", default="train_label_full")
     parser.add_argument('--mode', type=str, required=True, choices=['train', 'fine_tune', 'test', 'continue_train'])
     parser.add_argument('--device', type=str, choices=['cuda', 'cpu'], default='cuda')
 
