@@ -20,7 +20,7 @@ class Model:
                 {'params': model.decoder.parameters(), 'lr': 1e-4},
                 {'params': model.encoder.parameters(), 'lr': 1e-6},
             ])
-        elif self.mode == 'fine_tuning':
+        elif self.mode == 'fine_tune':
             model = torch.load(self.model_dir)
             freeze_layers_encoder = [
                  model.encoder.conv1,

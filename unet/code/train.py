@@ -1,13 +1,11 @@
 from torch.utils.data import DataLoader
-import matplotlib.pyplot as plt
-import os, pickle, torch
+import torch
 import segmentation_models_pytorch as smp
 from argparse import ArgumentParser
 import numpy as np
 from code.utils import *
-from code.brats_dataset import Dataset
-from code.model import Model
-
+from dataset.brats_dataset import Dataset
+from model.unet_model import Model
 
 """
 Using a U-net architecture for segmentation of Tumor Modalities
@@ -31,6 +29,7 @@ class Train:
                  synthetic_dir,
                  test_dir,
                  model,
+                 train_mode,
                  **kwargs):
 
         # the fold number to execute the code for
@@ -64,6 +63,7 @@ class Train:
         # training
         self.mode = mode
         self.device = device
+        self.train_mode = train_mode
 
         # all_classes: background, tumor region 1, tumor region 2, non-tumor brain region, tumor region 3
         # classes: classes to be trained upon
@@ -73,10 +73,7 @@ class Train:
         # set paths
         self.model_name = model_name
 
-        self.log_dir = os.path.join(self.root_dir, 'logs', self.fold, self.model_name)
         self.model_dir = os.path.join(self.root_dir, 'models', self.fold, self.model_name)
-        self.result_dir = os.path.join(self.root_dir, 'results', self.fold, self.model_name)
-        self.scanner_plots_dir = os.path.join(self.root_dir, 'scanner_class_plots', self.fold, self.model_name)
 
         # dataset paths
         self.x_dir = dict()
@@ -105,25 +102,9 @@ class Train:
             '2013', 'CBICA', 'TCIA01', 'TCIA02', 'TCIA03', 'TCIA04', 'TCIA05', 'TCIA06', 'TCIA08', 'TMC',
         ]
 
-        self.scanner_class = 0
-        self.scanner_classes_size = []
-
-        self.freeze_layers_encoder = None
-        self.fine_tune_layers_encoder = None
-
-        self.freeze_layers_decoder = None
-        self.fine_tune_layers_decoder = None
-
     def create_folders(self):
-        # create folders for results and logs to be saved
-        if not os.path.isdir(self.log_dir):
-            os.makedirs(self.log_dir)
-        if not os.path.isdir(self.result_dir):
-            os.makedirs(self.result_dir)
-        if not os.path.isfile(self.model_dir):
+        if not os.path.join(self.root_dir, 'models', self.fold):
             os.makedirs(self.model_dir)
-        if not os.path.isdir(self.scanner_plots_dir):
-            os.makedirs(self.scanner_plots_dir)
 
     def set_paths(self, root):
         d = dict()
@@ -141,7 +122,6 @@ class Train:
         self.x_dir_test, self.y_dir_test = self.set_paths(self.test_dir)
 
     def create_dataset(self):
-        # create the pure dataset
         self.full_dataset_pure = Dataset(
             self.x_dir,
             self.y_dir,
@@ -152,13 +132,10 @@ class Train:
         pure_size = int(len(self.full_dataset_pure) * self.pure_ratio)
         self.full_dataset_pure = torch.utils.data.Subset(self.full_dataset_pure, np.arange(pure_size))
 
-        if self.mode == 'pure':
-            # mode is pure then full dataset is the pure dataset
+        if self.train_mode == 'real_only':
             self.full_dataset = self.full_dataset_pure
 
-        elif self.mode == 'none':
-            # mode is none_only, full dataset consists of synthetic images generated from segmentation masks without
-            # any augmentations
+        elif self.train_mode == 'syn_only':
             full_dataset_syn = Dataset(
                 self.x_dir_syn,
                 self.y_dir_syn,
@@ -166,12 +143,10 @@ class Train:
                 augmentation=get_training_augmentation_simple(),
             )
 
-            # synthetic_size = int(len(self.full_dataset_pure) * self.synthetic_ratio)
             self.full_dataset = full_dataset_syn
             self.full_dataset_pure = self.full_dataset
 
         else:
-            # for modes train or fine_tune
             full_dataset_syn = Dataset(
                 self.x_dir_syn,
                 self.y_dir_syn,
@@ -182,37 +157,9 @@ class Train:
             synthetic_size = int(len(full_dataset_syn) * self.synthetic_ratio)
             full_dataset_syn = torch.utils.data.Subset(full_dataset_syn, np.arange(synthetic_size))
 
-            # 200%
-            # full_dataset_syn = torch.utils.data.ConcatDataset((full_dataset_syn, full_dataset_syn))
             self.full_dataset = torch.utils.data.ConcatDataset((self.full_dataset_pure, full_dataset_syn))
 
         return self.full_dataset, self.full_dataset_pure
-
-    def load_results(self, model_name=None):
-        # load the results
-        if model_name is not None:
-            log_dir = os.path.join(self.root_dir, 'logs', model_name)
-        else:
-            log_dir = self.log_dir
-        with open(log_dir + '/train_loss', 'rb') as f:
-            train_loss = pickle.load(f)
-        with open(log_dir + '/valid_loss', 'rb') as f:
-            valid_loss = pickle.load(f)
-        with open(log_dir + '/train_score', 'rb') as f:
-            train_score = pickle.load(f)
-        with open(log_dir + '/valid_score', 'rb') as f:
-            valid_score = pickle.load(f)
-        return train_loss, valid_loss, train_score, valid_score
-
-    def write_results(self, train_loss, valid_loss, train_score, valid_score):
-        with open(self.log_dir + '/train_loss', 'wb') as f:
-            pickle.dump(train_loss, f)
-        with open(self.log_dir + '/valid_loss', 'wb') as f:
-            pickle.dump(valid_loss, f)
-        with open(self.log_dir + '/train_score', 'wb') as f:
-            pickle.dump(train_score, f)
-        with open(self.log_dir + '/valid_score', 'wb') as f:
-            pickle.dump(valid_score, f)
 
     def train_model(self):
 
@@ -276,15 +223,6 @@ class Train:
             train_score[i] = train_logs['f-score']
             valid_score[i] = valid_logs['f-score']
 
-        # if continuing training, then load the previous loss and f-score logs
-        if self.mode == 'continue_train':
-            train_loss_prev, valid_loss_prev, train_score_prev, valid_score_prev = self.load_results()
-            train_loss = np.append(train_loss_prev, train_loss)
-            valid_loss = np.append(valid_loss_prev, valid_loss)
-            train_score = np.append(train_score_prev, train_score)
-            valid_score = np.append(valid_score_prev, valid_score)
-        self.write_results(train_loss, valid_loss, train_score, valid_score)
-
     def evaluate_model(self, scanner_cls=None):
         # load best saved checkpoint
         best_model = torch.load(self.model_dir)
@@ -324,43 +262,15 @@ class Train:
         print("F-score Mean: ", np.mean(f_scores))
         print("F-scores Standard Dev: ", np.std(f_scores))
         print("F-scores: ", f_scores)
-        print("*************************\n")
 
         return np.mean(f_scores)
-
-    def plot_results(self, model_name=None):
-        # load the results and make a plot
-        if model_name is not None:
-            plot_dir = os.path.join(self.root_dir, 'plots', model_name, '.png')
-        else:
-            plot_dir = os.path.join(self.root_dir, 'plots', self.model_name, '.png')
-
-        x = np.arange(self.epochs_num)
-
-        train_loss, valid_loss, train_score, valid_score = self.load_results(model_name)
-
-        plt.plot(x, train_score)
-        plt.plot(x, valid_score)
-        plt.legend(['train_score', 'valid_score'], loc='lower right')
-        plt.yticks(np.arange(0.0, 1.0, step=0.1))
-        plt.savefig(plot_dir, bbox_inches='tight')
-        plt.clf()
-
-    def dump_results(self, results):
-        file = os.path.join(self.result_dir, 'all_class_results.npy')
-        data = np.load(file)
-
-        print(data.shape, results.shape)
-        data = np.vstack([data, results])
-        print(data.shape)
-        np.save(file, data)
 
 
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('--model_name', type=str, required=True)
     parser.add_argument('--fold', type=int, required=True, default=1, help='dataset fold number if applicable')
-    parser.add_argument('--scanner_class', type=int, required=True)
+    parser.add_argument('--train_mode', type=str, choices=['real_only', 'syn_only', 'mixed'], default='mixed')
     parser.add_argument('--gpu', type=str, default="0")
     parser.add_argument('--pure_ratio', type=float, default=1.0)
     parser.add_argument('--synthetic_ratio', type=float, default=1.0)
@@ -380,6 +290,7 @@ if __name__ == "__main__":
     parser.add_argument('--mode', type=str, required=True, choices=['train', 'fine_tune', 'test', 'continue_train'])
     parser.add_argument('--encoder', type=str, choices=['resnet34'], default='resnet34')
     parser.add_argument('--activation', type=str, choices=['softmax'], default='softmax')
+    parser.add_argument('--test_class', type=int, choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], default=None)
     parser.add_argument('--device', type=str, choices=['cuda', 'cpu'], default='cuda')
 
     args = parser.parse_args()
@@ -394,53 +305,7 @@ if __name__ == "__main__":
     unet_model.set_dataset_paths()
     unet_model.create_dataset()
 
-    if args.mode == 'train':
-        unet_model.train_model()
     if args.mode == 'test':
-        pure_scores = []
-        scores = []
-        # for scanner_id, scanner in enumerate(unet_model.scanner_classes):
-        """
-        unet_model.model_name = config["model_name"] + '_{}'.format(scanner_class)
-        unet_model.model_dir = unet_model.root_dir + 'models/' + \
-                               unet_model.loss + '/' + \
-                               unet_model.fold + '/' + \
-                               unet_model.model_name
-        """
-        scores.append(unet_model.evaluate_model(scanner_cls=None))
-        """
-        unet_model.model_name = 'model_epochs100_percent0_pure_vis_5'
-        unet_model.model_dir = unet_model.root_dir + 'models/' + \
-                               unet_model.loss + '/' + \
-                               unet_model.fold + '/' + \
-                               unet_model.model_name
-        pure_scores.append(unet_model.evaluate_model(scanner_cls=scanner_id))
-        
-
-        x = np.arange(len(scores))
-        width = 0.35
-
-        unet_model.dump_results(results=np.array(scores))
-
-        fig = plt.figure(figsize=(20, 10))
-        ax = fig.add_subplot(111)
-        ax.bar(x, scores, label="conditioned", width=width)
-        # ax.bar(x + width, pure_scores, label="unconditioned", width=width)
-        ax.set_title("F-scores of model conditioned on scanner classes")
-        ax.set_ylim(0.0, 1.0)
-        ax.set_xticks(x + width / 2)
-        ax.set_yticks(np.linspace(0.0, 1.0, 50))
-        ax.set_ylabel("f-score")
-        ax.set_xlabel("Scanner Classes")
-        ax.set_xticklabels(unet_model.scanner_classes)
-        ax.legend()
-        ax.grid()
-        fig.tight_layout()
-        plt.savefig(unet_model.scanner_plots_paths +
-                    "new")
-        plt.close(fig)
-        """
-
-    if args.test_pure:
-        for scanner_id, scanner in enumerate(unet_model.scanner_classes):
-            unet_model.evaluate_model(scanner_cls=scanner_id)
+        unet_model.evaluate_model(scanner_cls=args.test_class)
+    else:
+        unet_model.train_model()
