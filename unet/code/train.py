@@ -1,18 +1,20 @@
 from torch.utils.data import DataLoader
-import albumentations as albu
 import matplotlib.pyplot as plt
-import os, cv2, pickle, sys, torch
+import os, pickle, torch
 import segmentation_models_pytorch as smp
 from argparse import ArgumentParser
-from brats_dataset import Dataset
 import numpy as np
+from code.utils import *
+from code.brats_dataset import Dataset
+from code.model import Model
+
 
 """
 Using a U-net architecture for segmentation of Tumor Modalities
 """
 
 
-class UnetTumorSegmentator:
+class Train:
     def __init__(self,
                  mode,
                  model_name,
@@ -28,6 +30,7 @@ class UnetTumorSegmentator:
                  real_dir,
                  synthetic_dir,
                  test_dir,
+                 model,
                  **kwargs):
 
         # the fold number to execute the code for
@@ -60,11 +63,7 @@ class UnetTumorSegmentator:
 
         # training
         self.mode = mode
-        self.encoder = 'resnet34'
-        self.encoder_weights = None
         self.device = device
-        self.activation = 'softmax'
-        self.loss = 'cross_entropy'
 
         # all_classes: background, tumor region 1, tumor region 2, non-tumor brain region, tumor region 3
         # classes: classes to be trained upon
@@ -74,10 +73,10 @@ class UnetTumorSegmentator:
         # set paths
         self.model_name = model_name
 
-        self.log_dir = os.path.join(self.root_dir, 'logs', self.loss, self.fold, self.model_name)
-        self.model_dir = os.path.join(self.root_dir, 'models', self.loss, self.fold, self.model_name)
-        self.result_dir = os.path.join(self.root_dir, 'results', self.loss, self.fold, self.model_name)
-        self.scanner_plots_dir = os.path.join(self.root_dir, 'scanner_class_plots', self.loss, self.fold, self.model_name)
+        self.log_dir = os.path.join(self.root_dir, 'logs', self.fold, self.model_name)
+        self.model_dir = os.path.join(self.root_dir, 'models', self.fold, self.model_name)
+        self.result_dir = os.path.join(self.root_dir, 'results', self.fold, self.model_name)
+        self.scanner_plots_dir = os.path.join(self.root_dir, 'scanner_class_plots', self.fold, self.model_name)
 
         # dataset paths
         self.x_dir = dict()
@@ -88,16 +87,18 @@ class UnetTumorSegmentator:
         self.y_dir_test = None
 
         # loaded or created model
-        self.model = None
+        self.model, self.optimizer = model.create_model()
 
         # full dataset and the pure dataset
         self.full_dataset = None
         self.full_dataset_pure = None
 
         # model setup
-        self.model_loss = None
-        self.metrics = None
-        self.optimizer = None
+        self.model_loss = smp.utils.losses.BCEJaccardLoss(eps=1.)
+        self.metrics = [
+            smp.utils.metrics.IoUMetric(eps=1.),
+            smp.utils.metrics.FscoreMetric(eps=1.)
+        ]
 
         # scanner classes of BRATS dataset
         self.scanner_classes = [
@@ -139,24 +140,13 @@ class UnetTumorSegmentator:
         self.x_dir_syn, self.y_dir_syn = self.set_paths(self.synthetic_dir)
         self.x_dir_test, self.y_dir_test = self.set_paths(self.test_dir)
 
-    def scanner_class_sizes(self):
-        for i, cls in enumerate(self.scanner_classes):
-            scanner_dataset = Dataset(
-                self.x_dir,
-                self.y_dir,
-                classes=self.classes,
-                scanner=i,
-                augmentation=self.get_training_augmentation_padding(),
-            )
-            self.scanner_classes_size.append(len(scanner_dataset))
-
     def create_dataset(self):
         # create the pure dataset
         self.full_dataset_pure = Dataset(
             self.x_dir,
             self.y_dir,
             classes=self.classes,
-            augmentation=self.get_training_augmentation_padding(),
+            augmentation=get_training_augmentation_padding(),
         )
 
         pure_size = int(len(self.full_dataset_pure) * self.pure_ratio)
@@ -166,68 +156,27 @@ class UnetTumorSegmentator:
             # mode is pure then full dataset is the pure dataset
             self.full_dataset = self.full_dataset_pure
 
-        elif "none" in self.mode:
+        elif self.mode == 'none':
             # mode is none_only, full dataset consists of synthetic images generated from segmentation masks without
             # any augmentations
             full_dataset_syn = Dataset(
                 self.x_dir_syn,
                 self.y_dir_syn,
                 classes=self.classes,
-                augmentation=self.get_training_augmentation_simple(),
+                augmentation=get_training_augmentation_simple(),
             )
 
             # synthetic_size = int(len(self.full_dataset_pure) * self.synthetic_ratio)
             self.full_dataset = full_dataset_syn
             self.full_dataset_pure = self.full_dataset
 
-        elif self.mode == "train":
-            if self.scanner_class == "balanced":
-                datasets = []
-                max_scanner_class = max(self.scanner_classes_size)
-
-                for i, cls in enumerate(self.scanner_classes):
-                    x_dir_syn = {'t1ce': self.x_dir_syn['t1ce'][i],
-                                 't2': self.x_dir_syn['t2'][i],
-                                 't1': self.x_dir_syn['t1'][i],
-                                 'flair': self.x_dir_syn['flair'][i]}
-                    y_dir_syn = self.y_dir_syn[i]
-
-                    full_dataset_scanner_syn = Dataset(
-                        x_dir_syn,
-                        y_dir_syn,
-                        classes=self.classes,
-                        augmentation=self.get_training_augmentation_padding(),
-                    )
-
-                    full_dataset_scanner_syn = torch.utils.data.Subset(full_dataset_scanner_syn,
-                                                                       np.arange(max_scanner_class -
-                                                                                 self.scanner_classes_size[i]))
-
-                    datasets.append(full_dataset_scanner_syn)
-
-                full_dataset_syn = torch.utils.data.ConcatDataset(datasets)
-            else:
-                full_dataset_syn = Dataset(
-                    self.x_dir_syn,
-                    self.y_dir_syn,
-                    classes=self.classes,
-                    augmentation=self.get_training_augmentation_padding(),
-                )
-
-            synthetic_size = int(len(full_dataset_syn) * self.synthetic_ratio)
-            full_dataset_syn = torch.utils.data.Subset(full_dataset_syn, np.arange(synthetic_size))
-
-            # 200%
-            # full_dataset_syn = torch.utils.data.ConcatDataset((full_dataset_syn, full_dataset_syn))
-            self.full_dataset = torch.utils.data.ConcatDataset((self.full_dataset_pure, full_dataset_syn))
-
         else:
-            # for modes elastic, coregistration and none simply add the corresponding synthetic images to pure dataset
+            # for modes train or fine_tune
             full_dataset_syn = Dataset(
                 self.x_dir_syn,
                 self.y_dir_syn,
                 classes=self.classes,
-                augmentation=self.get_training_augmentation_padding(),
+                augmentation=get_training_augmentation_padding(),
             )
 
             synthetic_size = int(len(full_dataset_syn) * self.synthetic_ratio)
@@ -239,87 +188,10 @@ class UnetTumorSegmentator:
 
         return self.full_dataset, self.full_dataset_pure
 
-    def create_model(self):
-        # create or load the model
-        if self.mode == 'continue_train':
-            self.model = torch.load(self.model_dir)
-
-            self.freeze_layers_encoder = [self.model.encoder.conv1,
-                                          self.model.encoder.bn1,
-                                          self.model.encoder.relu,
-                                          self.model.encoder.maxpool,
-                                          self.model.encoder.layer1,
-                                          self.model.encoder.layer2,
-                                          self.model.encoder.layer3]
-
-            self.fine_tune_layers_encoder = list(self.model.encoder.layer4.parameters())
-
-            self.freeze_layers_decoder = [self.model.decoder.layer1.block,
-                                          self.model.decoder.layer2.block,
-                                          self.model.decoder.layer3.block,
-                                          self.model.decoder.layer4.block]
-
-            self.fine_tune_layers_decoder = list(self.model.decoder.layer5.
-                                                 parameters()) + list(self.model.decoder.final_conv.parameters())
-
-        else:
-            self.model = smp.Unet(
-                encoder_name=self.encoder,
-                encoder_weights=self.encoder_weights,
-                classes=len(self.classes),
-                activation=self.activation,
-            )
-        return self.model
-
-    def setup_model(self):
-        # setup the model loss, metrics and optimizer
-        self.model_loss = smp.utils.losses.BCEJaccardLoss(eps=1.)
-        self.metrics = [
-            smp.utils.metrics.IoUMetric(eps=1.),
-            smp.utils.metrics.FscoreMetric(eps=1.),
-        ]
-
-        if self.mode == 'fine_tuning':
-            for layer in self.freeze_layers_encoder:
-                layer.require_grad = False
-            for layer in self.freeze_layers_decoder:
-                layer.require_grad = False
-            self.optimizer = torch.optim.Adam([
-                {'params': self.fine_tune_layers_decoder, 'lr': 1e-4},
-                {'params': self.fine_tune_layers_encoder, 'lr': 1e-6},
-            ])
-        else:
-            self.model.decoder.layer1.require_grad = False
-            self.optimizer = torch.optim.Adam([
-                {'params': self.model.decoder.parameters(), 'lr': 1e-4},
-                {'params': self.model.encoder.parameters(), 'lr': 1e-6},
-            ])
-
-    @staticmethod
-    def get_training_augmentation_padding():
-        # Add padding to make image shape divisible by 32
-        test_transform = [
-            albu.PadIfNeeded(256, 256, cv2.BORDER_CONSTANT, (0, 0, 0))
-        ]
-        return albu.Compose(test_transform)
-
-    @staticmethod
-    def get_training_augmentation_simple():
-        # add padding and also a few simple augmentations
-        test_transform = [
-            albu.Rotate(limit=15, interpolation=1, border_mode=4, value=None, always_apply=False, p=0.5),
-            albu.VerticalFlip(always_apply=False, p=0.5),
-            albu.HorizontalFlip(always_apply=False, p=0.5),
-            albu.Transpose(always_apply=False, p=0.5),
-            albu.CenterCrop(height=200, width=200, always_apply=False, p=0.5),
-            albu.PadIfNeeded(256, 256, cv2.BORDER_CONSTANT, (0, 0, 0))
-        ]
-        return albu.Compose(test_transform)
-
     def load_results(self, model_name=None):
         # load the results
         if model_name is not None:
-            log_dir = self.root_dir + 'logs/' + self.loss + '/' + model_name
+            log_dir = os.path.join(self.root_dir, 'logs', model_name)
         else:
             log_dir = self.log_dir
         with open(log_dir + '/train_loss', 'rb') as f:
@@ -426,7 +298,7 @@ class UnetTumorSegmentator:
             self.x_dir_test,
             self.y_dir_test,
             classes=self.classes,
-            augmentation=self.get_training_augmentation_padding(),
+            augmentation=get_training_augmentation_padding(),
             scanner=scanner_cls
         )
 
@@ -459,9 +331,9 @@ class UnetTumorSegmentator:
     def plot_results(self, model_name=None):
         # load the results and make a plot
         if model_name is not None:
-            plot_dir = self.root_dir + '/plots/' + self.loss + '/' + model_name + '.png'
+            plot_dir = os.path.join(self.root_dir, 'plots', model_name, '.png')
         else:
-            plot_dir = self.root_dir + '/plots/' + self.loss + '/' + self.model_name + '.png'
+            plot_dir = os.path.join(self.root_dir, 'plots', self.model_name, '.png')
 
         x = np.arange(self.epochs_num)
 
@@ -475,7 +347,7 @@ class UnetTumorSegmentator:
         plt.clf()
 
     def dump_results(self, results):
-        file = os.path.join(self.root_dir, 'all_class_results.npy')
+        file = os.path.join(self.result_dir, 'all_class_results.npy')
         data = np.load(file)
 
         print(data.shape, results.shape)
@@ -506,19 +378,21 @@ if __name__ == "__main__":
     parser.add_argument('--flair', type=str, help="name for t1ce data directories", default="train_flair_img_full")
     parser.add_argument('--label', type=str, help="name for labels data directories", default="train_label_full")
     parser.add_argument('--mode', type=str, required=True, choices=['train', 'fine_tune', 'test', 'continue_train'])
+    parser.add_argument('--encoder', type=str, choices=['resnet34'], default='resnet34')
+    parser.add_argument('--activation', type=str, choices=['softmax'], default='softmax')
     parser.add_argument('--device', type=str, choices=['cuda', 'cpu'], default='cuda')
 
     args = parser.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
-    unet_model = UnetTumorSegmentator(**args.__dict__)
+    model_cls = Model(args)
+    args.model = model_cls
+
+    unet_model = Train(**args.__dict__)
 
     unet_model.create_folders()
     unet_model.set_dataset_paths()
-    unet_model.scanner_class_sizes()
     unet_model.create_dataset()
-    unet_model.create_model()
-    unet_model.setup_model()
 
     if args.mode == 'train':
         unet_model.train_model()
