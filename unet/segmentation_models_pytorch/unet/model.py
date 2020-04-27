@@ -35,11 +35,19 @@ class Unet(EncoderDecoder):
             classes=1,
             activation='sigmoid',
             center=False,  # useful for VGG models
+            dataset='brats'
     ):
-        encoder = get_encoder(
-            encoder_name,
-            encoder_weights=encoder_weights
-        )
+        if dataset == 'brats':
+            encoder = get_encoder(
+                encoder_name,
+                in_channels=4,
+                encoder_weights=encoder_weights
+            )
+        else:
+            encoder = get_encoder(
+                encoder_name,
+                encoder_weights=encoder_weights
+            )
 
         decoder = UnetDecoder(
             encoder_channels=encoder.out_shapes,

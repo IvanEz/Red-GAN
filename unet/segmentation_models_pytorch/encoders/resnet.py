@@ -7,13 +7,12 @@ import torch.nn as nn
 
 class ResNetEncoder(ResNet):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, in_channels, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.pretrained = False
         del self.fc
         # modification managing for four channels:
-        self.conv1 = nn.Conv2d(4, 64, kernel_size=7, stride=2, padding=3,
-                               bias=False)
+        self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
 
     def forward(self, x):
         x0 = self.conv1(x)
@@ -32,7 +31,7 @@ class ResNetEncoder(ResNet):
     def load_state_dict(self, state_dict, **kwargs):
         state_dict.pop('fc.bias')
         state_dict.pop('fc.weight')
-        # modification for four channels
+
         conv1_weight = state_dict['conv1.weight']
         state_dict['conv1.weight'] = conv1_weight.sum(dim=4, keepdim=True)
         super().load_state_dict(state_dict, **kwargs)

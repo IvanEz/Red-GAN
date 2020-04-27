@@ -1,15 +1,14 @@
 import torch.nn as nn
 from torchvision.models.vgg import VGG
-from torchvision.models.vgg import make_layers
 from torchvision.models.vgg import cfgs
 from pretrainedmodels.models.torchvision_models import pretrained_settings
 
 
 class VGGEncoder(VGG):
 
-    def __init__(self, config, batch_norm=False, *args, **kwargs):
+    def __init__(self, in_channels, config, batch_norm=False, *args, **kwargs):
         super().__init__(
-            make_layers(config, batch_norm=batch_norm), 
+            make_layers(in_channels, config, batch_norm=batch_norm),
             *args, 
             **kwargs
         )
@@ -34,6 +33,21 @@ class VGGEncoder(VGG):
             if k.startswith('classifier'):
                 state_dict.pop(k)
         super().load_state_dict(state_dict, **kwargs)
+
+
+def make_layers(in_channels, cfg, batch_norm=False):
+    layers = []
+    for v in cfg:
+        if v == 'M':
+            layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+        else:
+            conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
+            if batch_norm:
+                layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
+            else:
+                layers += [conv2d, nn.ReLU(inplace=True)]
+            in_channels = v
+    return nn.Sequential(*layers)
 
 
 vgg_encoders = {

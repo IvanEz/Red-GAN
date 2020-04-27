@@ -4,7 +4,6 @@ import segmentation_models_pytorch as smp
 from argparse import ArgumentParser
 import numpy as np
 from code.utils import *
-from dataset.brats_dataset import Dataset
 from model.unet_model import Model
 
 """
@@ -28,8 +27,8 @@ class Train:
                  real_dir,
                  synthetic_dir,
                  test_dir,
-                 model,
                  train_mode,
+                 dataset,
                  **kwargs):
 
         # the fold number to execute the code for
@@ -41,6 +40,7 @@ class Train:
         self.test_dir = test_dir
         self.t1ce, self.t1, self.t2, self.flair, self.label = \
             kwargs['t1ce'], kwargs['t1'], kwargs['t2'], kwargs['flair'], kwargs['label']
+        self.images, self.masks = kwargs['images'], kwargs['masks']
 
         # epochs
         self.epochs_num = epochs
@@ -64,11 +64,7 @@ class Train:
         self.mode = mode
         self.device = device
         self.train_mode = train_mode
-
-        # all_classes: background, tumor region 1, tumor region 2, non-tumor brain region, tumor region 3
-        # classes: classes to be trained upon
-        self.all_classes = ['bg', 't_2', 't_1', 'b', 't_3']
-        self.classes = ['t_2', 't_1', 't_3']
+        self.dataset = dataset
 
         # set paths
         self.model_name = model_name
@@ -83,9 +79,6 @@ class Train:
         self.x_dir_test = dict()
         self.y_dir_test = None
 
-        # loaded or created model
-        self.model, self.optimizer = model.create_model()
-
         # full dataset and the pure dataset
         self.full_dataset = None
         self.full_dataset_pure = None
@@ -97,22 +90,41 @@ class Train:
             smp.utils.metrics.FscoreMetric(eps=1.)
         ]
 
-        # scanner classes of BRATS dataset
-        self.scanner_classes = [
-            '2013', 'CBICA', 'TCIA01', 'TCIA02', 'TCIA03', 'TCIA04', 'TCIA05', 'TCIA06', 'TCIA08', 'TMC',
-        ]
+        if self.dataset == 'brats':
+            # scanner classes of BRATS dataset
+            self.scanner_classes = [
+                '2013', 'CBICA', 'TCIA01', 'TCIA02', 'TCIA03', 'TCIA04', 'TCIA05', 'TCIA06', 'TCIA08', 'TMC',
+            ]
+            from dataset.brats_dataset import Dataset
+            self.Dataset = Dataset
+            self.classes = ['t_2', 't_1', 't_3']
+            self.model, self.optimizer = Model(root_dir, model_name, fold, mode, kwargs['encoder'],
+                                               kwargs['activation'], dataset, len(self.classes)).create_model()
+        else:
+            self.scanner_classes = [
+                'melanoma', 'seborrheic keratosis', 'nevus'
+            ]
+            from dataset.isic_dataset import Dataset
+            self.Dataset = Dataset
+            self.classes = ['lesion']
+            self.model, self.optimizer = Model(root_dir, model_name, fold, mode, kwargs['encoder'],
+                                               kwargs['activation'], dataset, len(self.classes)).create_model()
 
     def create_folders(self):
         if not os.path.join(self.root_dir, 'models', self.fold):
             os.makedirs(self.model_dir)
 
     def set_paths(self, root):
-        d = dict()
-        d['t1ce'] = os.path.join(root, self.t1ce)
-        d['flair'] = os.path.join(root, self.flair)
-        d['t2'] = os.path.join(root, self.t2)
-        d['t1'] = os.path.join(root, self.t1)
-        y = os.path.join(root, self.label)
+        if self.dataset == 'brats':
+            d = dict()
+            d['t1ce'] = os.path.join(root, self.t1ce)
+            d['flair'] = os.path.join(root, self.flair)
+            d['t2'] = os.path.join(root, self.t2)
+            d['t1'] = os.path.join(root, self.t1)
+            y = os.path.join(root, self.label)
+        else:
+            d = os.path.join(root, self.images)
+            y = os.path.join(root, self.masks)
 
         return d, y
 
@@ -122,11 +134,11 @@ class Train:
         self.x_dir_test, self.y_dir_test = self.set_paths(self.test_dir)
 
     def create_dataset(self):
-        self.full_dataset_pure = Dataset(
+        self.full_dataset_pure = self.Dataset(
             self.x_dir,
             self.y_dir,
             classes=self.classes,
-            augmentation=get_training_augmentation_padding(),
+            augmentation=get_training_augmentation_padding(self.dataset),
         )
 
         pure_size = int(len(self.full_dataset_pure) * self.pure_ratio)
@@ -136,22 +148,24 @@ class Train:
             self.full_dataset = self.full_dataset_pure
 
         elif self.train_mode == 'syn_only':
-            full_dataset_syn = Dataset(
+            full_dataset_syn = self.Dataset(
                 self.x_dir_syn,
                 self.y_dir_syn,
                 classes=self.classes,
-                augmentation=get_training_augmentation_simple(),
+                augmentation=get_training_augmentation_simple(self.dataset),
+                synthesized=True
             )
 
             self.full_dataset = full_dataset_syn
             self.full_dataset_pure = self.full_dataset
 
         else:
-            full_dataset_syn = Dataset(
+            full_dataset_syn = self.Dataset(
                 self.x_dir_syn,
                 self.y_dir_syn,
                 classes=self.classes,
-                augmentation=get_training_augmentation_padding(),
+                augmentation=get_training_augmentation_padding(self.dataset),
+                synthesized=True
             )
 
             synthetic_size = int(len(full_dataset_syn) * self.synthetic_ratio)
@@ -232,11 +246,11 @@ class Train:
         else:
             print("Testing for: ", self.scanner_classes[scanner_cls])
 
-        full_dataset_test = Dataset(
+        full_dataset_test = self.Dataset(
             self.x_dir_test,
             self.y_dir_test,
             classes=self.classes,
-            augmentation=get_training_augmentation_padding(),
+            augmentation=get_training_augmentation_padding(self.dataset),
             scanner=scanner_cls
         )
 
@@ -287,17 +301,17 @@ if __name__ == "__main__":
     parser.add_argument('--t1', type=str, help="name for t1ce data directories", default="train_t1_img_full")
     parser.add_argument('--flair', type=str, help="name for t1ce data directories", default="train_flair_img_full")
     parser.add_argument('--label', type=str, help="name for labels data directories", default="train_label_full")
+    parser.add_argument('--images', type=str, help="name for image data directories of isic", default="images")
+    parser.add_argument('--masks', type=str, help="name for mask data directories of isic", default="segmentation_masks")
     parser.add_argument('--mode', type=str, required=True, choices=['train', 'fine_tune', 'test', 'continue_train'])
     parser.add_argument('--encoder', type=str, choices=['resnet34'], default='resnet34')
     parser.add_argument('--activation', type=str, choices=['softmax'], default='softmax')
     parser.add_argument('--test_class', type=int, choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], default=None)
+    parser.add_argument('--dataset', type=str, choices=['brats', 'isic'], default='brats')
     parser.add_argument('--device', type=str, choices=['cuda', 'cpu'], default='cuda')
 
     args = parser.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-
-    model_cls = Model(args)
-    args.model = model_cls
 
     unet_model = Train(**args.__dict__)
 

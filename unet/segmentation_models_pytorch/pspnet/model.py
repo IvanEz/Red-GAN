@@ -39,11 +39,19 @@ class PSPNet(EncoderDecoder):
             classes=21,
             dropout=0.2,
             activation='softmax',
+            dataset = 'brats',
     ):
-        encoder = get_encoder(
-            encoder_name,
-            encoder_weights=encoder_weights
-        )
+        if dataset == 'brats':
+            encoder = get_encoder(
+                encoder_name,
+                in_channels=4,
+                encoder_weights=encoder_weights
+            )
+        else:
+            encoder = get_encoder(
+                encoder_name,
+                encoder_weights=encoder_weights
+            )
 
         decoder = PSPDecoder(
             encoder_channels=encoder.out_shapes,

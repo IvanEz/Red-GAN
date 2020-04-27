@@ -19,9 +19,9 @@ encoders.update(densenet_encoders)
 encoders.update(inception_encoders)
 
 
-def get_encoder(name, encoder_weights=None):
+def get_encoder(name, in_channels=3, encoder_weights=None):
     Encoder = encoders[name]['encoder']
-    encoder = Encoder(**encoders[name]['params'])
+    encoder = Encoder(in_channels, **encoders[name]['params'])
     encoder.out_shapes = encoders[name]['out_shapes']
 
     if encoder_weights is not None:

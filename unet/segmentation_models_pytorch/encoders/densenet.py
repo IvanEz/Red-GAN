@@ -13,6 +13,8 @@ class DenseNetEncoder(DenseNet):
         del self.classifier
         self.initialize()
 
+        self.features.conv0 = nn.Conv2d(3, kwargs['num_init_features'], kernel_size=7, stride=2, padding=3, bias=False)
+
     @staticmethod
     def _transition(x, transition_block):
         for module in transition_block:

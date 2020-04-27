@@ -4,13 +4,22 @@ import os
 
 
 class Model:
-    def __init__(self, args):
-        self.fold = 'fold_' + str(args.fold)
-        self.model_dir = os.path.join(args.root_dir, 'models', self.fold, args.model_name)
-        self.mode = args.mode
-        self.encoder = args.encoder
-        self.activation = args.activation
-        self.classes = 3
+    def __init__(self,
+                 root_dir,
+                 model_name,
+                 fold, mode,
+                 encoder,
+                 activation,
+                 dataset,
+                 classes):
+
+        self.fold = 'fold_' + str(fold)
+        self.model_dir = os.path.join(root_dir, 'models', self.fold, model_name)
+        self.mode = mode
+        self.encoder = encoder
+        self.activation = activation
+        self.dataset = dataset
+        self.classes = classes
 
     def create_model(self):
         if self.mode == 'continue_train':
@@ -55,6 +64,7 @@ class Model:
                 encoder_weights=None,
                 classes=self.classes,
                 activation=self.activation,
+                dataset=self.dataset,
             )
             model.decoder.layer1.require_grad = False
             optimizer = torch.optim.Adam([

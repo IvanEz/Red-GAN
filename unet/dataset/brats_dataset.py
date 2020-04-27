@@ -15,7 +15,8 @@ class Dataset(BaseDataset):
             classes=None,
             augmentation=None,
             preprocessing=None,
-            scanner=None
+            scanner=None,
+            synthesized=None,
     ):
         self.scanner_classes = [
             '2013',

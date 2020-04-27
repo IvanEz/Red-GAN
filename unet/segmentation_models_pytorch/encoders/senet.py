@@ -3,16 +3,19 @@ from pretrainedmodels.models.senet import SEBottleneck
 from pretrainedmodels.models.senet import SEResNetBottleneck
 from pretrainedmodels.models.senet import SEResNeXtBottleneck
 from pretrainedmodels.models.senet import pretrained_settings
+import torch.nn as nn
 
 
 class SENetEncoder(SENet):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, in_channels, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.pretrained = False
         
         del self.last_linear
         del self.avg_pool
+
+        self.layer0[0] = nn.Conv2d(in_channels, 64, 3, stride=2, padding=1, bias=False)
 
     def forward(self, x):
         for module in self.layer0[:-1]:

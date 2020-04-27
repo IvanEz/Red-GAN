@@ -7,17 +7,18 @@ import json
 
 
 class Dataset(BaseDataset):
-    CLASSES = ['lesion']
 
     def __init__(
             self,
             images_dir,
             masks_dir,
+            classes=None,
             augmentation=None,
             preprocessing=None,
-            lesion_cls=None,
+            scanner=None,
             synthesized=False,
     ):
+        self.classes = classes
         self.lesion_classes = [
             'melanoma',
             'seborrheic keratosis',
@@ -37,10 +38,10 @@ class Dataset(BaseDataset):
             if meta["name"] + format_img in files:
                 ids[diag].append(meta["name"])
 
-        if lesion_cls is None:
+        if scanner is None:
             self.ids = [os.path.basename(x) for x in glob.glob(images_dir + r'/*.*')]
         else:
-            self.ids = ids[lesion_cls]
+            self.ids = ids[scanner]
 
         self.images_fps = [os.path.join(images_dir, image_id.split('.')[0] + format_img)
                            for image_id in self.ids]

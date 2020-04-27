@@ -1,14 +1,17 @@
 import torch.nn as nn
 from pretrainedmodels.models.inceptionresnetv2 import InceptionResNetV2
 from pretrainedmodels.models.inceptionresnetv2 import pretrained_settings
+from pretrainedmodels.models.inceptionresnetv2 import BasicConv2d
 
 
 class InceptionResNetV2Encoder(InceptionResNetV2):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, in_channels, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.pretrained = False
+
+        self.conv2d_1a = BasicConv2d(in_channels, 32, kernel_size=3, stride=2)
 
         # correct paddings
         for m in self.modules():
