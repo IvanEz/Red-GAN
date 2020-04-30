@@ -21,21 +21,16 @@ class BratsDataset(Pix2pixDataset):
         parser.set_defaults(load_size=load_size)
         parser.set_defaults(crop_size=256)
         parser.set_defaults(display_winsize=256)
-        parser.set_defaults(label_nc=13)
+        parser.set_defaults(label_nc=5)
         parser.set_defaults(contain_dontcare_label=False)
 
-        parser.add_argument('--label_dir', type=str, required=True,
-                            help='path to the directory that contains label images')
-        parser.add_argument('--image_dir_t1ce', type=str, required=True,
-                            help='path to the directory that contains t1ce modality')
-        parser.add_argument('--image_dir_flair', type=str, required=True,
-                            help='path to the directory that contains flair modality')
-        parser.add_argument('--image_dir_t2', type=str, required=True,
-                            help='path to the directory that contains t2 modality')
-        parser.add_argument('--image_dir_t1', type=str, required=True,
-                            help='path to the directory that contains t1 modality')
-        parser.add_argument('--scanner_nc', type=int, required=True, default=10,
-                            help='the number of scanner classes')
+        parser.add_argument('--label_dir', type=str, required=True, help='directory that contains label images')
+        parser.add_argument('--image_dir_t1ce', type=str, required=True, help='directory that contains t1ce modality')
+        parser.add_argument('--image_dir_flair', type=str, required=True, help='directory that contains flair modality')
+        parser.add_argument('--image_dir_t2', type=str, required=True, help='directory that contains t2 modality')
+        parser.add_argument('--image_dir_t1', type=str, required=True, help='directory that contains t1 modality')
+        parser.add_argument('--scanner_nc', type=int, default=10, help='the number of scanner classes')
+
         parser.add_argument('--instance_dir', type=str, default='',
                             help='path to the directory that contains instance maps. Leave black if not exists')
         return parser
@@ -44,7 +39,6 @@ class BratsDataset(Pix2pixDataset):
         label_dir = opt.label_dir
         label_paths = make_dataset(label_dir, recursive=False, read_cache=True)
 
-        # modification: save the image paths of all three modalities
         image_paths = dict()
 
         image_dir_t1ce = opt.image_dir_t1ce
@@ -64,8 +58,5 @@ class BratsDataset(Pix2pixDataset):
             instance_paths = make_dataset(instance_dir, recursive=False, read_cache=True)
         else:
             instance_paths = []
-
-        # assert len(label_paths) == ((len(image_paths['t1ce']) + len(image_paths['t1']) + len(image_paths['t2']))/3), \
-        #     "The #images in %s and %s do not match. Is there something wrong."
 
         return label_paths, image_paths, instance_paths

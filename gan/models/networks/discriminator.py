@@ -11,7 +11,6 @@ from models.networks.normalization import get_nonspade_norm_layer
 import util.util as util
 
 
-# doc: defines the multiscale discriminator, consisting of multiple discriminators
 class MultiscaleDiscriminator(BaseNetwork):
     @staticmethod
     def modify_commandline_options(parser, is_train):
@@ -31,7 +30,6 @@ class MultiscaleDiscriminator(BaseNetwork):
     def __init__(self, opt):
         super().__init__()
         self.opt = opt
-        # doc: add different NLayerDiscriminator within the multiscale discriminator
         for i in range(opt.num_D):
             subnetD = self.create_single_discriminator(opt)
             self.add_module('discriminator_%d' % i, subnetD)
@@ -55,7 +53,6 @@ class MultiscaleDiscriminator(BaseNetwork):
         result = []
         get_intermediate_features = not self.opt.no_ganFeat_loss
 
-        # doc: all the discriminators which are the children of multiscale discriminator are provided the input
         for name, D in self.named_children():
             out = D(input)
             if not get_intermediate_features:
@@ -103,17 +100,15 @@ class NLayerDiscriminator(BaseNetwork):
 
     def compute_D_input_nc(self, opt):
         input_nc = opt.label_nc + opt.output_nc
-        # doc: adding 3 more channels for the feature maps from the segmentator i.e. 1 channel for each tumor class
         input_nc += 3
         if opt.contain_dontcare_label:
             input_nc += 1
-        if not opt.no_instance:
+        if opt.instance:
             input_nc += 1
         return input_nc
 
     def forward(self, input):
         results = [input]
-        # doc: all the submodels which are the children of NLayerDiscriminator are provided the input
         for submodel in self.children():
             intermediate_output = submodel(results[-1])
             results.append(intermediate_output)

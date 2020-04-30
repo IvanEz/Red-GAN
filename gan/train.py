@@ -49,13 +49,6 @@ for epoch in iter_counter.training_epochs():
                                             losses, iter_counter.time_per_iter)
             visualizer.plot_current_errors(losses, iter_counter.total_steps_so_far)
 
-        # doc: removing the printing of images for now
-        # if iter_counter.needs_displaying():
-        #     visuals = OrderedDict([('input_label', data_i['label']),
-        #                           ('synthesized_image', trainer.get_latest_generated()),
-        #                            ('real_image', data_i['image'])])
-        #     visualizer.display_current_results(visuals, epoch, iter_counter.total_steps_so_far)
-
         if iter_counter.needs_saving():
             print('saving the latest model (epoch %d, total_steps %d)' %
                   (epoch, iter_counter.total_steps_so_far))

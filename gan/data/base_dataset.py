@@ -82,16 +82,8 @@ def get_transform(opt, params, method=Image.BICUBIC, normalize=True, toTensor=Tr
     if opt.isTrain and not opt.no_flip:
         transform_list.append(transforms.Lambda(lambda img: __flip(img, params['flip'])))
 
-    # modification: adding a new transformation for number of output channels
-    if opt.output_nc == 1:
-        transform_list += [transforms.Grayscale(num_output_channels=1)]
-
     if toTensor:
         transform_list += [transforms.ToTensor()]
-
-    # modification: broadcasting to just 1 channel rather then 3 because the image is grayscale
-    # if normalize:
-    #    transform_list += [transforms.Normalize([0.5], [0.5])]
 
     return transforms.Compose(transform_list)
 

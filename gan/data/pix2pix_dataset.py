@@ -24,7 +24,7 @@ class Pix2pixDataset(BaseDataset):
         label_paths, image_paths, instance_paths = self.get_paths(opt)
 
         util.natural_sort(label_paths)
-        # modification: check if the dataset mode is brats
+
         if opt.dataset_mode == 'brats':
             util.natural_sort(image_paths['t1ce'])
             util.natural_sort(image_paths['flair'])
@@ -32,7 +32,7 @@ class Pix2pixDataset(BaseDataset):
             util.natural_sort(image_paths['t1'])
         else:
             util.natural_sort(image_paths)
-        if not opt.no_instance:
+        if opt.instance:
             util.natural_sort(instance_paths)
 
         label_paths = label_paths[:opt.max_dataset_size]
@@ -89,9 +89,9 @@ class Pix2pixDataset(BaseDataset):
         label = label.convert('L')
         params = get_params(self.opt, label.size)
         transform_label = get_transform(self.opt, params, method=Image.NEAREST, normalize=False)
-        # modification: scale by 255.0 because the tensor is normalized
+
         label_tensor = transform_label(label) * 255.0
-        label_tensor[label_tensor == 255] = self.opt.label_nc  # 'unknown' is opt.label_nc
+        label_tensor[label_tensor == 255] = self.opt.label_nc
 
         if self.opt.dataset_mode == 'brats':
             image_path = dict()
@@ -119,23 +119,16 @@ class Pix2pixDataset(BaseDataset):
             image_tensor_t2 = transform_image(image_t2)
             image_tensor_t1 = transform_image(image_t1)
             image_tensor = torch.cat((image_tensor_t1ce, image_tensor_flair, image_tensor_t2, image_tensor_t1), dim=0)
-
-
         else:
-            # input image (real images)
             image_path = self.image_paths[index]
-            # modification: removing this assert as the label filename doesn't have to the same as the image name
-            # assert self.paths_match(label_path, image_path), \
-            #    "The label_path %s and image_path %s don't match." % \
-            #    (label_path, image_path)
+
             image = Image.open(image_path)
-            # modification: convert the image to grayscale rather then RGB
             image = image.convert('L')
             transform_image = get_transform(self.opt, params)
             image_tensor = transform_image(image)
 
         # if using instance maps
-        if self.opt.no_instance:
+        if not self.opt.instance:
             instance_tensor = 0
         else:
             instance_path = self.instance_paths[index]

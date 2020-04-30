@@ -21,7 +21,7 @@ class FacadesDataset(Pix2pixDataset):
         parser.set_defaults(display_winsize=256)
         parser.set_defaults(label_nc=13)
         parser.set_defaults(contain_dontcare_label=False)
-        parser.set_defaults(no_instance=True)
+        parser.set_defaults(instance=False)
         return parser
 
     def get_paths(self, opt):

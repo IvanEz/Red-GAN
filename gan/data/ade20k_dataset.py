@@ -23,7 +23,7 @@ class ADE20KDataset(Pix2pixDataset):
         parser.set_defaults(contain_dontcare_label=True)
         parser.set_defaults(cache_filelist_read=False)
         parser.set_defaults(cache_filelist_write=False)
-        parser.set_defaults(no_instance=True)
+        parser.set_defaults(instance=False)
         return parser
 
     def get_paths(self, opt):

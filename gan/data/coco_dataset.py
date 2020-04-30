@@ -49,7 +49,7 @@ class CocoDataset(Pix2pixDataset):
                 image_portrait_paths = make_dataset(image_portrait_dir, recursive=False, read_cache=True)
                 image_paths += image_portrait_paths
 
-        if not opt.no_instance:
+        if opt.instance:
             instance_dir = os.path.join(root, '%s_inst' % phase)
             instance_paths = make_dataset(instance_dir, recursive=False, read_cache=True)
 

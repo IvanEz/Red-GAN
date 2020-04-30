@@ -30,22 +30,17 @@ class Pix2PixTrainer():
                 self.pix2pix_model_on_one_gpu.create_optimizers(opt)
             self.old_lr = opt.lr
 
-    # doc: called in the train file, in a for loop, once every epoch
     def run_generator_one_step(self, data):
         self.optimizer_G.zero_grad()
-        # doc: calls the forward(self, data, mode) function in Pix2PixModel class
         g_losses, generated = self.pix2pix_model(data, mode='generator')
-        # segmentation loss will be added to the total amount of loss hereby
         g_loss = sum(g_losses.values()).mean()
         g_loss.backward()
         self.optimizer_G.step()
         self.g_losses = g_losses
         self.generated = generated
 
-    # doc: called in the train file, in a for loop, once every epoch
     def run_discriminator_one_step(self, data):
         self.optimizer_D.zero_grad()
-        # doc: calls the forward(self, data, mode) function in Pix2PixModel class
         d_losses = self.pix2pix_model(data, mode='discriminator')
         d_loss = sum(d_losses.values()).mean()
         d_loss.backward()
