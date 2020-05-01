@@ -26,6 +26,8 @@ class IsicDataset(Pix2pixDataset):
         parser.add_argument('--label_dir', type=str, required=True, help='directory that contains segmentation masks')
         parser.add_argument('--image_dir', type=str, required=True, help='directory that contains images')
         parser.add_argument('--condition_nc', type=int, default=3, help='the number of lesion classes')
+        parser.add_argument('--isic_meta_data', type=str, default='./datasets/isic/meta_data.json',
+                            help='path of meta data file')
 
         parser.add_argument('--instance_dir', type=str, default='',
                             help='path to the directory that contains instance maps. Leave black if not exists')

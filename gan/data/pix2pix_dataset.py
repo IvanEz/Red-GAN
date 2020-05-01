@@ -73,7 +73,7 @@ class Pix2pixDataset(BaseDataset):
         self.dataset_size = size
 
         if opt.dataset_mode == 'isic':
-            meta_file = "/home/qasima/segmentation_models.pytorch/code/meta_data.json"
+            meta_file = opt.isic_meta_data
 
             self.lesion_cls = dict()
             with open(meta_file, 'r') as f:
