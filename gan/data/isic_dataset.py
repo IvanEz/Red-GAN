@@ -7,7 +7,7 @@ from data.pix2pix_dataset import Pix2pixDataset
 from data.image_folder import make_dataset
 
 
-class BratsDataset(Pix2pixDataset):
+class IsicDataset(Pix2pixDataset):
     """ Dataset that loads images from directories
         Use option --label_dir, --image_dir, --instance_dir to specify the directories.
         The images in the directories are sorted in alphabetical order and paired in order.
@@ -20,15 +20,12 @@ class BratsDataset(Pix2pixDataset):
         parser.set_defaults(load_size=256)
         parser.set_defaults(crop_size=256)
         parser.set_defaults(display_winsize=256)
-        parser.set_defaults(label_nc=5)
+        parser.set_defaults(label_nc=1)
         parser.set_defaults(contain_dontcare_label=False)
 
-        parser.add_argument('--label_dir', type=str, required=True, help='directory that contains label images')
-        parser.add_argument('--image_dir_t1ce', type=str, required=True, help='directory that contains t1ce modality')
-        parser.add_argument('--image_dir_flair', type=str, required=True, help='directory that contains flair modality')
-        parser.add_argument('--image_dir_t2', type=str, required=True, help='directory that contains t2 modality')
-        parser.add_argument('--image_dir_t1', type=str, required=True, help='directory that contains t1 modality')
-        parser.add_argument('--condition_nc', type=int, default=10, help='the number of scanner classes')
+        parser.add_argument('--label_dir', type=str, required=True, help='directory that contains segmentation masks')
+        parser.add_argument('--image_dir', type=str, required=True, help='directory that contains images')
+        parser.add_argument('--condition_nc', type=int, default=3, help='the number of lesion classes')
 
         parser.add_argument('--instance_dir', type=str, default='',
                             help='path to the directory that contains instance maps. Leave black if not exists')
@@ -38,19 +35,8 @@ class BratsDataset(Pix2pixDataset):
         label_dir = opt.label_dir
         label_paths = make_dataset(label_dir, recursive=False, read_cache=True)
 
-        image_paths = dict()
-
-        image_dir_t1ce = opt.image_dir_t1ce
-        image_paths['t1ce'] = make_dataset(image_dir_t1ce, recursive=False, read_cache=True)
-
-        image_dir_flair = opt.image_dir_flair
-        image_paths['flair'] = make_dataset(image_dir_flair, recursive=False, read_cache=True)
-
-        image_dir_t2 = opt.image_dir_t2
-        image_paths['t2'] = make_dataset(image_dir_t2, recursive=False, read_cache=True)
-
-        image_dir_t1 = opt.image_dir_t1
-        image_paths['t1'] = make_dataset(image_dir_t1, recursive=False, read_cache=True)
+        image_dir = opt.image_dir
+        image_paths = make_dataset(image_dir, recursive=False, read_cache=True)
 
         if len(opt.instance_dir) > 0:
             instance_dir = opt.instance_dir

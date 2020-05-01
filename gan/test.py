@@ -39,21 +39,20 @@ for i, data_i in enumerate(dataloader):
     img_path = data_i['path']
     for b in range(generated.shape[0]):
         if opt.dataset_mode == 'brats':
-            RESULTS_ROOT = '/home/qasima/venv_spade/SPADE/results/' + opt.name + '/fold_4/'
             visuals = OrderedDict([('input_label', data_i['label'][b]),
                                    ('synthesized_image', generated[b])])
             visuals = visualizer.convert_visuals_to_numpy(visuals)
             image_numpy = visuals["synthesized_image"]
-            util.save_image(image_numpy[:, :, 0], RESULTS_ROOT + str(opt.scanner_class) + '/train_t1ce_img_full'
+            util.save_image(image_numpy[:, :, 0], opt.results_dir + str(opt.condition_class) + '/train_t1ce_img_full'
                             + '/{}.png'.format(i * opt.batchSize + b),
                             create_dir=True)
-            util.save_image(image_numpy[:, :, 1], RESULTS_ROOT + str(opt.scanner_class) + '/train_flair_img_full'
+            util.save_image(image_numpy[:, :, 1], opt.results_dir + str(opt.condition_class) + '/train_flair_img_full'
                             + '/{}.png'.format(i * opt.batchSize + b),
                             create_dir=True)
-            util.save_image(image_numpy[:, :, 2], RESULTS_ROOT + str(opt.scanner_class) + '/train_t2_img_full'
+            util.save_image(image_numpy[:, :, 2], opt.results_dir + str(opt.condition_class) + '/train_t2_img_full'
                             + '/{}.png'.format(i * opt.batchSize + b),
                             create_dir=True)
-            util.save_image(image_numpy[:, :, 3], RESULTS_ROOT + str(opt.scanner_class) + '/train_t1_img_full'
+            util.save_image(image_numpy[:, :, 3], opt.results_dir + str(opt.condition_class) + '/train_t1_img_full'
                             + '/{}.png'.format(i * opt.batchSize + b),
                             create_dir=True)
             print('processing t1ce, flair, t2, t1 modalities of index {}'.format(i * opt.batchSize + b))
@@ -61,6 +60,10 @@ for i, data_i in enumerate(dataloader):
             print('process image... %s' % img_path[b])
             visuals = OrderedDict([('input_label', data_i['label'][b]),
                                    ('synthesized_image', generated[b])])
-            visualizer.save_images(webpage, visuals, img_path[b:b + 1])
+            visuals = visualizer.convert_visuals_to_numpy(visuals)
+            image_numpy = visuals["synthesized_image"]
+            util.save_image(image_numpy, opt.results_dir + str(opt.scanner_class)
+                            + '/{}'.format(img_path[b].split('/')[-1]),
+                            create_dir=True)
 
 webpage.save()

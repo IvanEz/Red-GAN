@@ -166,8 +166,10 @@ class BaseOptions():
         # set output channels according to the dataset mode
         if opt.dataset_mode == 'brats':
             opt.output_nc = 4
-        else:
+            opt.segmentator_nc = 3
+        elif opt.dataset_mode == 'isic':
             opt.output_nc = 3
+            opt.segmentator_nc = 1
 
         # set gpu ids
         str_ids = opt.gpu_ids.split(',')

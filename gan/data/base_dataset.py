@@ -27,6 +27,12 @@ class BaseDataset(data.Dataset):
             'TMC'
         ]
 
+        self.lesion_classes = [
+            'melanoma',
+            'seborrheic keratosis',
+            'nevus'
+        ]
+
     @staticmethod
     def modify_commandline_options(parser, is_train):
         return parser

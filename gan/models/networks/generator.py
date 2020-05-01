@@ -39,7 +39,7 @@ class SPADEGenerator(BaseNetwork):
             self.fc_0 = nn.Conv2d(self.opt.semantic_nc, 16 * nf, 3, padding=1)
 
         # embedding and fc layer for conditioning on the scanner class as well
-        self.embedding_0 = nn.Embedding(opt.scanner_nc, 1024)
+        self.embedding_0 = nn.Embedding(opt.condition_nc, 1024)
         self.fc_1 = nn.Linear(1024, 16 * nf * self.sh * self.sw)
 
         # multiplying the in dimensions of the head SPADE block by 2 because of the scanner vector

@@ -9,6 +9,7 @@ import util.util as util
 import numpy as np
 import os
 import torch
+import json
 
 
 class Pix2pixDataset(BaseDataset):
@@ -52,9 +53,10 @@ class Pix2pixDataset(BaseDataset):
                     "quite different. Are you sure about the pairing? Please see data/pix2pix_dataset.py to see " \
                     "what is going on, and use --no_pairing_check to bypass this." % (path1, path2)
 
+        self.condition_classes = self.scanner_classes if opt.dataset_mode == 'brats' else self.lesion_classes
+
         # check if the the number of scanner classes given is the same as initialized in base_dataset file
-        if opt.dataset_mode == "brats":
-            assert len(self.scanner_classes) == opt.scanner_nc, "The number of scanner classes mismatch"
+        assert len(self.condition_classes) == opt.condition_nc, "The number of classes mismatch"
 
         self.label_paths = label_paths
         if opt.dataset_mode == 'brats':
@@ -69,6 +71,17 @@ class Pix2pixDataset(BaseDataset):
 
         size = len(self.label_paths)
         self.dataset_size = size
+
+        if opt.dataset_mode == 'isic':
+            meta_file = "/home/qasima/segmentation_models.pytorch/code/meta_data.json"
+
+            self.lesion_cls = dict()
+            with open(meta_file, 'r') as f:
+                meta_data = json.load(f)
+
+            for meta in meta_data:
+                diag = meta["meta"]["clinical"]["diagnosis"]
+                self.lesion_cls[meta["name"]] = diag
 
     def get_paths(self, opt):
         label_paths = []
@@ -90,7 +103,11 @@ class Pix2pixDataset(BaseDataset):
         params = get_params(self.opt, label.size)
         transform_label = get_transform(self.opt, params, method=Image.NEAREST, normalize=False)
 
-        label_tensor = transform_label(label) * 255.0
+        if self.opt.dataset_mode == "brats":
+            label_tensor = transform_label(label) * 255.0
+        else:
+            label_tensor = transform_label(label)
+
         label_tensor[label_tensor == 255] = self.opt.label_nc
 
         if self.opt.dataset_mode == 'brats':
@@ -101,13 +118,13 @@ class Pix2pixDataset(BaseDataset):
             image_path['t2'] = self.image_paths['t2'][index]
             image_path['t1'] = self.image_paths['t1'][index]
 
-            for idx, scanner_class in enumerate(self.scanner_classes):
+            for idx, condition_class in enumerate(self.condition_classes):
                 if self.opt.isTrain:
-                    if scanner_class in image_path['flair']:
-                        scanner_class_idx = idx
+                    if condition_class in image_path['flair']:
+                        condition_class_idx = idx
                         break
                 else:
-                    scanner_class_idx = self.opt.scanner_class
+                    condition_class_idx = self.opt.condition_class
 
             image_t1ce = Image.open(image_path['t1ce'])
             image_flair = Image.open(image_path['flair'])
@@ -121,11 +138,16 @@ class Pix2pixDataset(BaseDataset):
             image_tensor = torch.cat((image_tensor_t1ce, image_tensor_flair, image_tensor_t2, image_tensor_t1), dim=0)
         else:
             image_path = self.image_paths[index]
-
             image = Image.open(image_path)
-            image = image.convert('L')
             transform_image = get_transform(self.opt, params)
             image_tensor = transform_image(image)
+
+            label_tensor[label_tensor==0] = 0.5
+
+            if self.opt.isTrain:
+                condition_class_idx = self.lesion_classes.index(self.lesion_cls[image_path.split('/')[-1].split('.')[0]])
+            else:
+                condition_class_idx = self.opt.condition_nc
 
         # if using instance maps
         if not self.opt.instance:
@@ -140,7 +162,7 @@ class Pix2pixDataset(BaseDataset):
                 instance_tensor = transform_label(instance)
 
         input_dict = {'label': label_tensor,
-                      'scanner': scanner_class_idx,
+                      'scanner': condition_class_idx,
                       'instance': instance_tensor,
                       'image': image_tensor,
                       'path': image_path,

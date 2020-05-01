@@ -13,7 +13,7 @@ class TestOptions(BaseOptions):
         parser.add_argument('--which_epoch', type=str, default='latest', help='which epoch to load? set to latest to '
                                                                               'use latest cached model')
         parser.add_argument('--how_many', type=int, default=float("inf"), help='how many test images to run')
-        parser.add_argument('--scanner_class', type=int, default=0, help='which scanner class to test with?')
+        parser.add_argument('--condition_class', type=int, default=0, help='which scanner class to condition with?')
 
         parser.set_defaults(preprocess_mode='scale_width_and_crop', crop_size=256, load_size=256, display_winsize=256)
         parser.set_defaults(serial_batches=True)
