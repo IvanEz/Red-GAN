@@ -17,6 +17,7 @@ class Dataset(BaseDataset):
             preprocessing=None,
             scanner=None,
             synthesized=False,
+            isic_meta_data='./data/isic/meta_data.json',
     ):
         self.classes = classes
         self.lesion_classes = [
@@ -26,11 +27,10 @@ class Dataset(BaseDataset):
         ]
 
         files = os.listdir(images_dir)
-        meta_file = "./meta_data.json"
         format_img = ".png" if synthesized else ".jpg"
 
         ids = {key: [] for key in self.lesion_classes}
-        with open(meta_file, 'r') as f:
+        with open(isic_meta_data, 'r') as f:
             meta_data = json.load(f)
 
         for meta in meta_data:

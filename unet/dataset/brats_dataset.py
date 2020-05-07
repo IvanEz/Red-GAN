@@ -17,6 +17,7 @@ class Dataset(BaseDataset):
             preprocessing=None,
             scanner=None,
             synthesized=None,
+            isic_meta_data=None,
     ):
         self.scanner_classes = [
             '2013',

@@ -3,7 +3,7 @@ import torch
 import segmentation_models_pytorch as smp
 from argparse import ArgumentParser
 import numpy as np
-from code.utils import *
+from utils import *
 from model.unet_model import Model
 
 """
@@ -11,11 +11,11 @@ Using a U-net architecture for segmentation of Tumor Modalities
 """
 
 
-class Train:
+class Run:
     def __init__(self,
                  mode,
                  model_name,
-                 pure_ratio,
+                 real_ratio,
                  synthetic_ratio,
                  test_ratio,
                  validation_ratio,
@@ -29,6 +29,7 @@ class Train:
                  test_dir,
                  train_mode,
                  dataset,
+                 isic_meta_data,
                  **kwargs):
 
         # the fold number to execute the code for
@@ -41,16 +42,17 @@ class Train:
         self.t1ce, self.t1, self.t2, self.flair, self.label = \
             kwargs['t1ce'], kwargs['t1'], kwargs['t2'], kwargs['flair'], kwargs['label']
         self.images, self.masks = kwargs['images'], kwargs['masks']
+        self.isic_meta_data = isic_meta_data
 
         # epochs
         self.epochs_num = epochs
         self.epochs_elapsed = epochs_elapsed
         self.total_epochs = 0 + self.epochs_num
 
-        # what proportion of pure data to be used
-        self.pure_ratio = pure_ratio
+        # what proportion of real data to be used
+        self.real_ratio = real_ratio
 
-        # proportion of synthetic or augmented data to be used, depending on the mode, w.r.t the pure dataset size
+        # proportion of synthetic or augmented data to be used, depending on the mode, w.r.t the real dataset size
         # can be set upto 2.0 i.e. 200%
         self.synthetic_ratio = synthetic_ratio
 
@@ -79,9 +81,9 @@ class Train:
         self.x_dir_test = dict()
         self.y_dir_test = None
 
-        # full dataset and the pure dataset
+        # full dataset and the real dataset
         self.full_dataset = None
-        self.full_dataset_pure = None
+        self.full_dataset_real = None
 
         # model setup
         self.model_loss = smp.utils.losses.BCEJaccardLoss(eps=1.)
@@ -134,30 +136,32 @@ class Train:
         self.x_dir_test, self.y_dir_test = self.set_paths(self.test_dir)
 
     def create_dataset(self):
-        self.full_dataset_pure = self.Dataset(
+        self.full_dataset_real = self.Dataset(
             self.x_dir,
             self.y_dir,
             classes=self.classes,
             augmentation=get_training_augmentation_padding(self.dataset),
+            isic_meta_data=self.isic_meta_data,
         )
 
-        pure_size = int(len(self.full_dataset_pure) * self.pure_ratio)
-        self.full_dataset_pure = torch.utils.data.Subset(self.full_dataset_pure, np.arange(pure_size))
+        real_size = int(len(self.full_dataset_real) * self.real_ratio)
+        self.full_dataset_real = torch.utils.data.Subset(self.full_dataset_real, np.arange(real_size))
 
         if self.train_mode == 'real_only':
-            self.full_dataset = self.full_dataset_pure
+            self.full_dataset = self.full_dataset_real
 
-        elif self.train_mode == 'syn_only':
+        elif self.train_mode == 'synthetic_only':
             full_dataset_syn = self.Dataset(
                 self.x_dir_syn,
                 self.y_dir_syn,
                 classes=self.classes,
                 augmentation=get_training_augmentation_simple(self.dataset),
-                synthesized=True
+                synthesized=True,
+                isic_meta_data=self.isic_meta_data,
             )
 
             self.full_dataset = full_dataset_syn
-            self.full_dataset_pure = self.full_dataset
+            self.full_dataset_real = self.full_dataset
 
         else:
             full_dataset_syn = self.Dataset(
@@ -165,15 +169,16 @@ class Train:
                 self.y_dir_syn,
                 classes=self.classes,
                 augmentation=get_training_augmentation_padding(self.dataset),
-                synthesized=True
+                synthesized=True,
+                isic_meta_data=self.isic_meta_data,
             )
 
             synthetic_size = int(len(full_dataset_syn) * self.synthetic_ratio)
             full_dataset_syn = torch.utils.data.Subset(full_dataset_syn, np.arange(synthetic_size))
 
-            self.full_dataset = torch.utils.data.ConcatDataset((self.full_dataset_pure, full_dataset_syn))
+            self.full_dataset = torch.utils.data.ConcatDataset((self.full_dataset_real, full_dataset_syn))
 
-        return self.full_dataset, self.full_dataset_pure
+        return self.full_dataset, self.full_dataset_real
 
     def train_model(self):
 
@@ -202,14 +207,14 @@ class Train:
         train_score = np.zeros(self.epochs_num)
         valid_score = np.zeros(self.epochs_num)
 
-        valid_size = int(self.validation_ratio * len(self.full_dataset_pure))
-        remaining_size = len(self.full_dataset_pure) - valid_size
+        valid_size = int(self.validation_ratio * len(self.full_dataset_real))
+        remaining_size = len(self.full_dataset_real) - valid_size
 
         for i in range(0, self.epochs_num):
 
             # During every epoch randomly sample from the dataset, for training and validation dataset members
             train_dataset = self.full_dataset
-            valid_dataset, remaining_dataset = torch.utils.data.random_split(self.full_dataset_pure,
+            valid_dataset, remaining_dataset = torch.utils.data.random_split(self.full_dataset_real,
                                                                              [valid_size, remaining_size])
             train_loader = DataLoader(train_dataset, batch_size=48, shuffle=True, num_workers=12)
             valid_loader = DataLoader(valid_dataset, batch_size=24, drop_last=True)
@@ -251,7 +256,8 @@ class Train:
             self.y_dir_test,
             classes=self.classes,
             augmentation=get_training_augmentation_padding(self.dataset),
-            scanner=scanner_cls
+            scanner=scanner_cls,
+            isic_meta_data=self.isic_meta_data,
         )
 
         # evaluate model on test set
@@ -282,15 +288,15 @@ class Train:
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument('--model_name', type=str, required=True)
-    parser.add_argument('--fold', type=int, required=True, default=1, help='dataset fold number if applicable')
-    parser.add_argument('--train_mode', type=str, choices=['real_only', 'syn_only', 'mixed'], default='mixed')
-    parser.add_argument('--gpu', type=str, default="0")
-    parser.add_argument('--pure_ratio', type=float, default=1.0)
-    parser.add_argument('--synthetic_ratio', type=float, default=1.0)
-    parser.add_argument('--test_ratio', type=float, default=1.0)
+    parser.add_argument('--model_name', type=str, required=True, help='the model name for loading/saving')
+    parser.add_argument('--fold', type=int, default=1, help='the current fold of the dataset')
+    parser.add_argument('--train_mode', type=str, choices=['real_only', 'synthetic_only', 'mixed'], default='mixed')
+    parser.add_argument('--gpu', type=str, default='0', help='the id of the GPU to be used')
+    parser.add_argument('--real_ratio', type=float, default=1.0, help='proportion of the real data to use')
+    parser.add_argument('--synthetic_ratio', type=float, default=1.0, help='proportion of the synthetic data to use')
+    parser.add_argument('--test_ratio', type=float, default=1.0, help='proportion of the test data to use')
     parser.add_argument('--validation_ratio', type=float, default=0.1, help='proportion of train set for validation')
-    parser.add_argument('--epochs', type=int, default=50)
+    parser.add_argument('--epochs', type=int, default=50, help='number of epochs to train for')
     parser.add_argument('--epochs_elapsed', type=int, default=0, help="if continue train, then epochs already elapsed")
     parser.add_argument('--root_dir', type=str, required=True, help="root dir where models, logs and plot are saved")
     parser.add_argument('--real_dir', type=str, required=True, help="root dir for the real data directory")
@@ -306,14 +312,15 @@ if __name__ == "__main__":
     parser.add_argument('--mode', type=str, required=True, choices=['train', 'fine_tune', 'test', 'continue_train'])
     parser.add_argument('--encoder', type=str, choices=['resnet34'], default='resnet34')
     parser.add_argument('--activation', type=str, choices=['softmax'], default='softmax')
-    parser.add_argument('--test_class', type=int, choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], default=None)
+    parser.add_argument('--test_class', type=int, choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], default=None, help='test only a specific class')
     parser.add_argument('--dataset', type=str, choices=['brats', 'isic'], default='brats')
     parser.add_argument('--device', type=str, choices=['cuda', 'cpu'], default='cuda')
+    parser.add_argument('--isic_meta_data', type=str, default='./data/isic/meta_data.json', help='path of meta data file for isic')
 
     args = parser.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
-    unet_model = Train(**args.__dict__)
+    unet_model = Run(**args.__dict__)
 
     unet_model.create_folders()
     unet_model.set_dataset_paths()
