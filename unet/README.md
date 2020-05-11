@@ -5,7 +5,7 @@ The models are adopted from https://github.com/qubvel/segmentation_models.pytorc
 
 ### Installation
 
-The following requirements should met:
+The following requirements should be installed for training the U-Net code used here:
 ```scipy
 numpy
 albumentations
