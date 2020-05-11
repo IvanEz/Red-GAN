@@ -33,8 +33,8 @@ class Pix2PixModel(torch.nn.Module):
                 self.criterionVGG = networks.VGGLoss(self.opt.gpu_ids)
             if opt.use_vae:
                 self.KLDLoss = networks.KLDLoss()
-            self.segmentation_model = \
-                torch.load(opt.segmentator)
+            if opt.segmentator is not None:
+                self.segmentation_model = torch.load(opt.segmentator)
 
     # Entry point for all calls involving forward pass
     # of deep networks. We used this approach since DataParallel module
@@ -146,18 +146,22 @@ class Pix2PixModel(torch.nn.Module):
         if self.opt.use_vae:
             G_losses['KLD'] = KLD_loss
 
-        if self.opt.dataset_mode == 'brats':
-            fake_image_clamped_scaled = torch.clamp(fake_image * 255.0, 0, 255)
-            fake_feature_map = self.segmentation_model.forward(fake_image_clamped_scaled)
-            real_image_scaled = real_image * 255.0
-            real_feature_map = self.segmentation_model.forward(real_image_scaled)
-        elif self.opt.dataset_mode == 'isic':
-            fake_image_clamped = torch.clamp(fake_image, 0, 1)
-            fake_feature_map = self.segmentation_model.forward(fake_image_clamped)
-            real_feature_map = self.segmentation_model.forward(real_image)
+        if self.opt.segmentator is not None:
+            if self.opt.dataset_mode == 'brats':
+                fake_image_clamped_scaled = torch.clamp(fake_image * 255.0, 0, 255)
+                fake_feature_map = self.segmentation_model.forward(fake_image_clamped_scaled)
+                real_image_scaled = real_image * 255.0
+                real_feature_map = self.segmentation_model.forward(real_image_scaled)
+            elif self.opt.dataset_mode == 'isic':
+                fake_image_clamped = torch.clamp(fake_image, 0, 1)
+                fake_feature_map = self.segmentation_model.forward(fake_image_clamped)
+                real_feature_map = self.segmentation_model.forward(real_image)
+            else:
+                fake_feature_map = self.segmentation_model.forward(fake_image)
+                real_feature_map = self.segmentation_model.forward(real_image)
 
-        fake_image = torch.cat((fake_image, fake_feature_map), 1)
-        real_image = torch.cat((real_image, real_feature_map), 1)
+            fake_image = torch.cat((fake_image, fake_feature_map), 1)
+            real_image = torch.cat((real_image, real_feature_map), 1)
 
         pred_fake, pred_real = self.discriminate(
             input_semantics, fake_image, real_image)
@@ -189,18 +193,22 @@ class Pix2PixModel(torch.nn.Module):
             fake_image = fake_image.detach()
             fake_image.requires_grad_()
 
-        if self.opt.dataset_mode == 'brats':
-            fake_image_clamped_scaled = torch.clamp(fake_image * 255.0, 0, 255)
-            fake_feature_map = self.segmentation_model.forward(fake_image_clamped_scaled)
-            real_image_scaled = real_image * 255.0
-            real_feature_map = self.segmentation_model.forward(real_image_scaled)
-        elif self.opt.dataset_mode == 'isic':
-            fake_image_clamped = torch.clamp(fake_image, 0, 1)
-            fake_feature_map = self.segmentation_model.forward(fake_image_clamped)
-            real_feature_map = self.segmentation_model.forward(real_image)
+        if self.opt.segmentator is not None:
+            if self.opt.dataset_mode == 'brats':
+                fake_image_clamped_scaled = torch.clamp(fake_image * 255.0, 0, 255)
+                fake_feature_map = self.segmentation_model.forward(fake_image_clamped_scaled)
+                real_image_scaled = real_image * 255.0
+                real_feature_map = self.segmentation_model.forward(real_image_scaled)
+            elif self.opt.dataset_mode == 'isic':
+                fake_image_clamped = torch.clamp(fake_image, 0, 1)
+                fake_feature_map = self.segmentation_model.forward(fake_image_clamped)
+                real_feature_map = self.segmentation_model.forward(real_image)
+            else:
+                fake_feature_map = self.segmentation_model.forward(fake_image)
+                real_feature_map = self.segmentation_model.forward(real_image)
 
-        fake_image = torch.cat((fake_image, fake_feature_map), 1)
-        real_image = torch.cat((real_image, real_feature_map), 1)
+            fake_image = torch.cat((fake_image, fake_feature_map), 1)
+            real_image = torch.cat((real_image, real_feature_map), 1)
 
         pred_fake, pred_real = self.discriminate(
             input_semantics, fake_image, real_image)

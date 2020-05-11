@@ -100,7 +100,8 @@ class NLayerDiscriminator(BaseNetwork):
 
     def compute_D_input_nc(self, opt):
         input_nc = opt.label_nc + opt.output_nc
-        input_nc += opt.segmentator_nc
+        if opt.segmentator is not None:
+            input_nc += opt.segmentator_nc
         if opt.contain_dontcare_label:
             input_nc += 1
         if opt.instance:
