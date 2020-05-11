@@ -51,7 +51,7 @@ The dataset paths from where the training data will be read follow the following
 The argument `--root_dir` specifies the directory where models, logs and plot are saved.
 
 ### Additional Details
-For BRATS dataset, the class information is read from the name of the file e.g. a t1ce image belonging to the TCIA05 class will be found at the path:
+For BRATS dataset, the class information is read from the name of the file. For example, a t1ce image belonging to the TCIA05 class will be found at the path:
 `$HOME/Red-GAN/unet/data/fold_3/train_flair_img_full/3081_TCIA05.png`
 
 For ISIC dataset, the class information is saved in the file meta_data.json
