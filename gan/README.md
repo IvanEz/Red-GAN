@@ -4,7 +4,8 @@
 # Red-GAN
 The implementation is in large adopted from SPADE-GAN (https://github.com/NVlabs/SPADE) 
 
-train.py script is used for training. Executing the statement `python3 train.py -h`, outputs:
+### Train
+The train.py script is used for training. Executing the help statement `python3 train.py -h` shows available training options:
 
 ````
 usage: train.py [-h] [--gpu_ids GPU_IDS]                                                                                                                                                              
@@ -157,8 +158,8 @@ optional arguments:
   --no_TTUR             Use TTUR training scheme (default: False)
   --lambda_kld LAMBDA_KLD
 ````
-
-test.py script is used for evaluation. Executing the statement `python3 test.py -h`, outputs:
+### Test
+The test.py script is used for evaluation. Executing the help statement `python3 test.py -h`, outputs:
 
 ````
 usage: test.py [-h] [--name NAME] [--gpu_ids GPU_IDS]                                                                                                                                                              
@@ -216,4 +217,4 @@ optional arguments:
 ````
 
 ### Additional Note:
-If the parameter ``segmentator`` is not set(to specify the segmentator path) then the third player segmentator is not included in the architecture, which results in the vanilla spade architecture.
+If the parameter `--segmentator` is not set (by specifying the segmentator path), then the third player is not included in the architecture, which results in the vanilla [SPADE](https://github.com/NVlabs/SPADE/blob/master/README.md) architecture.
