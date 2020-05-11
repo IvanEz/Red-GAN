@@ -4,7 +4,16 @@
 # Red-GAN
 The implementation is in large adopted from SPADE-GAN (https://github.com/NVlabs/SPADE) 
 
-### Train
+### Installation
+The following requirements should be installed for training the GAN code:
+```torch>=1.0.0
+torchvision
+dominate>=2.3.1
+dill
+scikit-image
+```
+### Help
+#### Train
 The train.py script is used for training. Executing the help statement `python3 train.py -h` shows available training options:
 
 ````
@@ -158,7 +167,7 @@ optional arguments:
   --no_TTUR             Use TTUR training scheme (default: False)
   --lambda_kld LAMBDA_KLD
 ````
-### Test
+#### Test
 The test.py script is used for evaluation. Executing the help statement `python3 test.py -h`, outputs:
 
 ````
