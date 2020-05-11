@@ -6,7 +6,7 @@ The paper proposes one more data augmentation protocol based on generative adver
 ### Getting started
 To use the three player design (SPADE design equiped with the segmentor) introduced in the paper, one has to first train the segmentor. For that, please step to the `unet` folder and check out the *readme* there. Once the segmentor is trained, step to the `gan` folder.
 
-To use only the two-player design (vanila [SPADE](https://github.com/NVlabs/SPADE/blob/master/README.md) architecture), step to the `gan` folder right away (in this case case `--segmentator` option should be specified as `None`).
+To use only the two-player design (vanila [SPADE](https://github.com/NVlabs/SPADE/blob/master/README.md) architecture), step to the `gan` folder right away (also, in this case, `--segmentator` option should be specified as `None`).
 
 ### Requirements
 Both GAN and U-Net parts are written in Pytorch. For further installation requirements, please check the corresponding folders.
