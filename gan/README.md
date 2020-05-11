@@ -226,4 +226,4 @@ optional arguments:
 ````
 
 ### Additional Note:
-If the parameter `--segmentator` is not set (by specifying the segmentator path), then the third player is not included in the architecture, which results in the vanilla [SPADE](https://github.com/NVlabs/SPADE/blob/master/README.md) architecture.
+If the parameter `--segmentator` is not set (by specifying the segmentor path), then the third player is not included in the architecture, which results in the vanilla [SPADE](https://github.com/NVlabs/SPADE/blob/master/README.md) architecture.
