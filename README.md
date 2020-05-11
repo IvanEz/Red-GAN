@@ -5,7 +5,7 @@ The repository contains code used for the *"Red-GAN: Attacking class imbalance v
 ### Training
 To use the three player design introduced in the paper, please step to the `unet` folder first and check out the instruction. Once the unet is trained, step to the `gan` folder.
 
-To use the vanila SPADE architecture, step to the `gan` folder right away and specify `--segmentator` option as `None`
+To use the vanila SPADE architecture (two-player design), step to the `gan` folder right away and specify `--segmentator` option as `None`
 
 ### Requirements
 Both GAN and U-Net parts are written in Pytorch. For further installation requirements, please check the corresponding folders.
