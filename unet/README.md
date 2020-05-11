@@ -3,6 +3,20 @@
 
 The models are adopted from https://github.com/qubvel/segmentation_models.pytorch.
 
+### Installation
+
+The following requirements should met:
+```scipy
+numpy
+albumentations
+torch
+opencv-python
+matplotlib
+torchvision==0.2.2
+pretrainedmodels==0.7.4
+torchnet==0.0.4
+```
+
 ### Help
 
 The training/testing can be carried out using the file run.py. Executing the help statement `python3 run.py -h` prints in the console the available options:
