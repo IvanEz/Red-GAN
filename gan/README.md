@@ -157,6 +157,12 @@ optional arguments:
   --no_TTUR             Use TTUR training scheme (default: False)
   --lambda_kld LAMBDA_KLD
 ````
+####Example command
+
+````bash
+python3 train.py --name isic_training --dataset_mode isic --label_dir ./datasets/isic/fold_2/train/segmentation_masks --image_dir ./datasets/isic/fold_2/train/images --dataroot ./datasets/isic/fold_2/train --batchSize 8 --niter 100 --no_pairing_check --gpu_ids=0 --segmentator ./checkpoints/isic_fold_2/model_epochs100_percent100_isic_256
+````
+
 
 test.py script is used for evaluation. Executing the statement `python3 test.py -h`, outputs:
 
@@ -214,6 +220,10 @@ optional arguments:
                         --contain_dopntcare_label. (default: 182)
 
 ````
+####Example command
+```bash
+python3 test.py --name BRATS_training --dataset_mode brats --label_dir ./datasets/BRATS_dataset_splices/fold_4/train_label_full --image_dir_t1ce ./datasets/BRATS_dataset_splices/fold_4/train_t1ce_img_full --image_dir_t1 ./datasets/BRATS_dataset_splices/fold_4/train_t1_img_full --image_dir_t2 ./datasets/BRATS_dataset_splices/fold_4/train_t2_img_full --image_dir_flair ./datasets/BRATS_dataset_splices/fold_4/train_flair_img_full --dataroot ./datasets/BRATS_dataset_splices/fold_4 --batchSize 16 --no_pairing_check --gpu_ids=0 --segmentator ./checkpoints/fold_4/model_epochs100_percent0_pure_vis --results_dir /home/qasima/venv_spade/SPADE/results/BRATS_training_scanner_4/fold_4/ --condition_class 0
+```
 
 ### Additional Note:
 If the parameter ``segmentator`` is not set(to specify the segmentator path) then the third player segmentator is not included in the architecture, which results in the vanilla spade architecture.
