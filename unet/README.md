@@ -52,6 +52,14 @@ The training/testing can be carried out using the file run.py. Executing the hel
     --isic_meta_data (type=str, default='./data/isic/meta_data.json', help='path of meta data file for isic')
 ```
 
+```
+
+####Example command
+
+```bash
+python3 run.py --model_name model_epochs100_percent100_scanner_vis_1 --gpu 1 --root_dir $HOME/Red-GAN/unet/ --mode train --fold 3 --real_dir $HOME/Red-GAN/unet/data/fold_3 --synthetic_dir $HOME/Red-GAN/unet/data/fold_3/1 --test_dir $HOME/Red-GAN/unet/data/fold_3/test --test_class 2 --train_mode real_only
+```
+
 ### Train/test arguments
 
 To train/test the model specify `--mode` argument (e.g. 'train' or 'test'):
