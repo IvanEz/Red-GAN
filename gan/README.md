@@ -4,7 +4,17 @@
 # Red-GAN
 The implementation is in large adopted from SPADE-GAN (https://github.com/NVlabs/SPADE) 
 
-train.py script is used for training. Executing the statement `python3 train.py -h`, outputs:
+### Installation
+The following requirements should be installed for training the GAN code:
+```torch>=1.0.0
+torchvision
+dominate>=2.3.1
+dill
+scikit-image
+```
+### Help
+#### Train
+The train.py script is used for training. Executing the help statement `python3 train.py -h` shows available training options:
 
 ````
 usage: train.py [-h] [--gpu_ids GPU_IDS]                                                                                                                                                              
@@ -226,4 +236,4 @@ python3 test.py --name BRATS_training --dataset_mode brats --label_dir ./dataset
 ```
 
 ### Additional Note:
-If the parameter ``segmentator`` is not set(to specify the segmentator path) then the third player segmentator is not included in the architecture, which results in the vanilla spade architecture.
+If the parameter `--segmentator` is not set (by specifying the segmentor path), then the third player is not included in the architecture, which results in the vanilla [SPADE](https://github.com/NVlabs/SPADE/blob/master/README.md) architecture.
